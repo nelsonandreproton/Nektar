@@ -1,0 +1,474 @@
+/* ── Reset & base ─────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #111118;
+  --surface:   #1c1c28;
+  --surface2:  #252535;
+  --border:    #2e2e45;
+  --text:      #e0e0f0;
+  --muted:     #7070a0;
+  --accent:    #7b6dff;
+  --accent-h:  #9d93ff;
+
+  --gold:      #ffd93d;
+  --green:     #43e97b;
+  --red:       #ff4d6d;
+  --blue:      #4fc3f7;
+
+  --key-white: #f5f3ee;
+  --key-black: #1a1a22;
+
+  --header-h: 52px;
+  --sidebar-w: 240px;
+  --keyboard-h: 180px;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+#header {
+  height: var(--header-h);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+#logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--accent-h);
+  white-space: nowrap;
+}
+
+#device-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+#device-select {
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 13px;
+  max-width: 240px;
+}
+
+#btn-refresh-devices {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 2px 8px;
+  transition: color 0.15s;
+}
+#btn-refresh-devices:hover { color: var(--text); }
+
+.status-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.connected    { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.status-dot.disconnected { background: var(--muted); }
+
+#device-label { font-size: 13px; color: var(--muted); }
+
+#midi-import-label {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--accent-h);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 4px 10px;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+#midi-import-label:hover { background: rgba(123,109,255,.15); }
+#midi-import-label input { display: none; }
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+#layout {
+  display: flex;
+  height: calc(100vh - var(--header-h) - var(--keyboard-h));
+  overflow: hidden;
+}
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+#category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.cat-btn {
+  flex: 1;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 4px 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.cat-btn:hover  { color: var(--text); border-color: var(--accent); }
+.cat-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+#lesson-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.lesson-item {
+  padding: 9px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  margin-bottom: 4px;
+  border: 1px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+}
+.lesson-item:hover  { background: var(--surface2); }
+.lesson-item.active { background: var(--surface2); border-color: var(--accent); }
+
+.lesson-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.lesson-item-meta {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.diff-dots {
+  display: inline-flex;
+  gap: 3px;
+  vertical-align: middle;
+}
+.diff-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+}
+.diff-dot.filled { background: var(--gold); }
+
+/* ── Main panel ──────────────────────────────────────────────────────────── */
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+  overflow: hidden;
+}
+
+#lesson-header {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+#lesson-meta { flex: 1; }
+
+#lesson-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+#lesson-desc {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
+#lesson-badges {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.badge.cat-scales    { border-color: #7b6dff55; color: var(--accent-h); }
+.badge.cat-songs     { border-color: #ff6d9355; color: #ff8ab0; }
+.badge.cat-chords    { border-color: #6dffb955; color: #5de8a0; }
+.badge.cat-exercises { border-color: #ffd93d55; color: var(--gold); }
+
+/* ── Controls ─────────────────────────────────────────────────────────────── */
+#lesson-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+}
+
+.ctrl-group { display: flex; align-items: center; gap: 8px; }
+.ctrl-group label { font-size: 12px; color: var(--muted); min-width: 48px; }
+
+.btn-group {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seg-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.seg-btn:not(:last-child) { border-right: 1px solid var(--border); }
+.seg-btn:hover  { color: var(--text); }
+.seg-btn.active { background: var(--accent); color: #fff; }
+
+#bpm-slider {
+  flex: 1;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.btn-row { gap: 6px; }
+
+#btn-reference, #btn-start, #btn-stop {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+#btn-reference { background: none; color: var(--accent-h); border-color: var(--accent); }
+#btn-reference:hover:not(:disabled) { background: rgba(123,109,255,.2); }
+
+#btn-start { background: var(--accent); color: #fff; border-color: var(--accent); }
+#btn-start:hover:not(:disabled) { background: var(--accent-h); }
+
+#btn-stop { background: none; color: var(--muted); }
+#btn-stop:hover:not(:disabled) { color: var(--red); border-color: var(--red); }
+
+button:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Score bar ────────────────────────────────────────────────────────────── */
+#score-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#progress-track {
+  width: 100%;
+  height: 6px;
+  background: var(--surface2);
+  border-radius: 3px;
+  overflow: hidden;
+}
+#progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--green));
+  transition: width 0.25s ease;
+  border-radius: 3px;
+}
+
+#score-cells {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+}
+.score-cell.correct { color: var(--green); }
+.score-cell.wrong   { color: var(--red); }
+.score-cell.step    { color: var(--muted); }
+.score-cell.pct     { color: var(--accent-h); font-weight: 700; }
+
+/* ── Hint area ────────────────────────────────────────────────────────────── */
+#hint-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+#hint-label {
+  font-size: 18px;
+  color: var(--muted);
+  text-align: center;
+}
+
+#hint-notes {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.hint-note-chip {
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  border: 2px solid var(--gold);
+  color: var(--gold);
+  background: rgba(255,217,61,.08);
+  transition: all 0.15s;
+}
+.hint-note-chip.pressed {
+  background: var(--green);
+  border-color: var(--green);
+  color: #000;
+}
+
+/* ── Result flash ─────────────────────────────────────────────────────────── */
+#result-flash {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 60px;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 100;
+}
+#result-flash.show-correct { animation: flash-correct 0.5s ease forwards; }
+#result-flash.show-wrong   { animation: flash-wrong   0.4s ease forwards; }
+
+@keyframes flash-correct {
+  0%   { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%,-60%) scale(1.4); }
+}
+@keyframes flash-wrong {
+  0%   { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%,-50%) scale(0.8); }
+}
+
+/* ── Keyboard container ───────────────────────────────────────────────────── */
+#keyboard-container {
+  height: var(--keyboard-h);
+  flex-shrink: 0;
+  background: #0d0d14;
+  border-top: 1px solid var(--border);
+  padding: 8px 4px 4px;
+  overflow: hidden;
+}
+
+#keyboard {
+  position: relative;
+  height: 100%;
+  user-select: none;
+}
+
+/* ── Piano keys ───────────────────────────────────────────────────────────── */
+.key-white {
+  position: absolute;
+  bottom: 0;
+  background: var(--key-white);
+  border: 1px solid #999;
+  border-top: none;
+  border-radius: 0 0 5px 5px;
+  cursor: pointer;
+  transition: background 0.06s;
+  z-index: 1;
+}
+.key-white:hover { background: #e8e6e0; }
+
+.key-black {
+  position: absolute;
+  bottom: 38%;
+  background: var(--key-black);
+  border: 1px solid #111;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  cursor: pointer;
+  transition: background 0.06s;
+  z-index: 2;
+  box-shadow: 2px 4px 6px rgba(0,0,0,.5);
+}
+.key-black:hover { background: #2a2a38; }
+
+/* Key label (C notes) */
+.key-label {
+  position: absolute;
+  bottom: 6px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 9px;
+  color: #999;
+  pointer-events: none;
+}
+
+/* State classes */
+.key-expected {
+  background: var(--gold) !important;
+  box-shadow: 0 0 12px var(--gold) !important;
+}
+.key-correct {
+  background: var(--green) !important;
+  box-shadow: 0 0 14px var(--green) !important;
+}
+.key-wrong {
+  background: var(--red) !important;
+  box-shadow: 0 0 12px var(--red) !important;
+}
+.key-pressed {
+  background: var(--blue) !important;
+  box-shadow: 0 0 10px var(--blue) !important;
+}
+.key-playback {
+  background: #c084fc !important;
+  box-shadow: 0 0 10px #c084fc !important;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ── Utility ──────────────────────────────────────────────────────────────── */
+.hidden { display: none !important; }

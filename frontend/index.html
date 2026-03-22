@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nektar Piano Lessons</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- ── Header ── -->
+<header id="header">
+  <div id="logo">🎹 Nektar Piano Lessons</div>
+  <div id="device-area">
+    <select id="device-select"><option value="">— select MIDI device —</option></select>
+    <button id="btn-refresh-devices" title="Refresh device list">↻</button>
+    <span id="device-status" class="status-dot disconnected"></span>
+    <span id="device-label">Not connected</span>
+  </div>
+  <label id="midi-import-label" title="Import a .mid file">
+    📂 Import MIDI
+    <input type="file" id="midi-file-input" accept=".mid,.midi" />
+  </label>
+</header>
+
+<!-- ── Main layout ── -->
+<div id="layout">
+
+  <!-- Sidebar: lesson list -->
+  <aside id="sidebar">
+    <div id="category-tabs">
+      <button class="cat-btn active" data-cat="all">All</button>
+      <button class="cat-btn" data-cat="scales">Scales</button>
+      <button class="cat-btn" data-cat="exercises">Exercises</button>
+      <button class="cat-btn" data-cat="chords">Chords</button>
+      <button class="cat-btn" data-cat="songs">Songs</button>
+    </div>
+    <div id="lesson-list"></div>
+  </aside>
+
+  <!-- Main area: lesson view -->
+  <main id="main">
+
+    <!-- Lesson header -->
+    <div id="lesson-header">
+      <div id="lesson-meta">
+        <h2 id="lesson-title">Select a lesson</h2>
+        <p id="lesson-desc">Choose from the list on the left to begin.</p>
+        <div id="lesson-badges"></div>
+      </div>
+      <div id="lesson-controls">
+        <!-- Hand selector -->
+        <div class="ctrl-group">
+          <label>Hand</label>
+          <div class="btn-group" id="hand-btns">
+            <button class="seg-btn active" data-hand="right">Right</button>
+            <button class="seg-btn"        data-hand="left">Left</button>
+            <button class="seg-btn"        data-hand="both">Both</button>
+          </div>
+        </div>
+        <!-- BPM -->
+        <div class="ctrl-group">
+          <label>BPM <span id="bpm-display">60</span></label>
+          <input type="range" id="bpm-slider" min="20" max="200" value="60" />
+        </div>
+        <!-- Action buttons -->
+        <div class="ctrl-group btn-row">
+          <button id="btn-reference" disabled>▶ Reference</button>
+          <button id="btn-start"     disabled>▶ Start</button>
+          <button id="btn-stop"      disabled>■ Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Score / progress bar -->
+    <div id="score-bar">
+      <div id="progress-track"><div id="progress-fill"></div></div>
+      <div id="score-cells">
+        <span class="score-cell correct" id="score-correct">✓ 0</span>
+        <span class="score-cell wrong"   id="score-wrong">✗ 0</span>
+        <span class="score-cell step"    id="score-step">0 / 0</span>
+        <span class="score-cell pct"     id="score-pct">—</span>
+      </div>
+    </div>
+
+    <!-- Hint area -->
+    <div id="hint-area">
+      <div id="hint-label">Select a lesson and press <strong>Start</strong></div>
+      <div id="hint-notes"></div>
+    </div>
+
+    <!-- Result flash overlay -->
+    <div id="result-flash" class="hidden"></div>
+
+  </main>
+</div>
+
+<!-- ── Keyboard ── -->
+<div id="keyboard-container">
+  <div id="keyboard"></div>
+</div>
+
+<!-- ── Scripts ── -->
+<script src="js/websocket.js"></script>
+<script src="js/keyboard.js"></script>
+<script src="js/lesson.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
