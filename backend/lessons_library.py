@@ -416,8 +416,7 @@ GO_TELL_AUNT_RHODY_NOTES = [
 
 # Minuet in G (Petzold, BWV Anh. 114) — Level 3 milestone in every method
 # G major (F# = MIDI 66 = F#4, F#5 = 78). 3/4 time: each beat = 1 quarter note.
-MINUET_IN_G_NOTES = [
-    # Section A (bars 1-8, beats 0-23)
+_MINUET_SECTION_A = [
     _note(62, 0), _note(67, 1), _note(69, 2),          # Bar 1:  D4 G4 A4
     _note(71, 3), _note(72, 4), _note(74, 5),           # Bar 2:  B4 C5 D5
     _note(76, 6, 2), _note(74, 8),                      # Bar 3:  E5(half) D5
@@ -426,15 +425,12 @@ MINUET_IN_G_NOTES = [
     _note(71, 15), _note(67, 16), _note(69, 17),        # Bar 6:  B4 G4 A4
     _note(71, 18, 2), _note(69, 20),                    # Bar 7:  B4(half) A4
     _note(67, 21, 3),                                    # Bar 8:  G4(dotted half)
-    # Section A repeat (bars 9-16, beats 24-47)
-    _note(62, 24), _note(67, 25), _note(69, 26),
-    _note(71, 27), _note(72, 28), _note(74, 29),
-    _note(76, 30, 2), _note(74, 32),
-    _note(71, 33, 3),
-    _note(72, 36), _note(71, 37), _note(69, 38),
-    _note(71, 39), _note(67, 40), _note(69, 41),
-    _note(71, 42, 2), _note(69, 44),
-    _note(67, 45, 3),
+]
+
+MINUET_IN_G_NOTES = (
+    _MINUET_SECTION_A
+    + [{**n, "beat": n["beat"] + 24} for n in _MINUET_SECTION_A]  # Section A repeat
+    + [
     # Section B (bars 17-24, beats 48-71)
     _note(79, 48), _note(78, 49), _note(76, 50),        # Bar 17: G5 F#5 E5
     _note(74, 51), _note(79, 52), _note(78, 53),        # Bar 18: D5 G5 F#5
@@ -453,26 +449,20 @@ MINUET_IN_G_NOTES = [
     _note(78, 87), _note(76, 88), _note(74, 89),        # Bar 30: F#5 E5 D5
     _note(67, 90, 2), _note(62, 92),                    # Bar 31: G4(half) D4
     _note(67, 93, 3),                                    # Bar 32: G4(dotted half)
-]
+])
 
 
 # ── New exercise helpers ───────────────────────────────────────────────────────
 
-def _contrary_motion_c_major() -> List[dict]:
-    """Both hands start on C4/C4 and move outward (contrary motion), then return."""
-    rh_up   = [60, 62, 64, 65, 67, 69, 71, 72]   # C4..C5
-    lh_down = [60, 59, 57, 55, 53, 52, 50, 48]   # C4..C3
-    notes = []
-    beat = 0.0
-    for r, l in zip(rh_up, lh_down):
-        notes.append({"note": r, "beat": beat, "duration": 1.0, "hand": "right"})
-        notes.append({"note": l, "beat": beat, "duration": 1.0, "hand": "left"})
-        beat += 1.0
-    for r, l in zip(reversed(rh_up[:-1]), reversed(lh_down[:-1])):
-        notes.append({"note": r, "beat": beat, "duration": 1.0, "hand": "right"})
-        notes.append({"note": l, "beat": beat, "duration": 1.0, "hand": "left"})
-        beat += 1.0
-    return notes
+def _contrary_motion_c_major():
+    """Both hands start on C4 and move outward (contrary motion), then return.
+    Returns (right_notes, left_notes) for use with 'tracks' lesson format."""
+    rh_pitches = [60, 62, 64, 65, 67, 69, 71, 72]  # C4..C5
+    lh_pitches = [60, 59, 57, 55, 53, 52, 50, 48]  # C4..C3
+    pitches = list(zip(rh_pitches, lh_pitches)) + list(zip(reversed(rh_pitches[:-1]), reversed(lh_pitches[:-1])))
+    rh = [{"note": r, "beat": float(i), "duration": 1.0, "hand": "right"} for i, (r, _) in enumerate(pitches)]
+    lh = [{"note": l, "beat": float(i), "duration": 1.0, "hand": "left"}  for i, (_, l) in enumerate(pitches)]
+    return rh, lh
 
 
 def _five_finger_broken_chord() -> List[dict]:
@@ -666,7 +656,7 @@ LESSONS: List[dict] = [
         "description": "Both hands start on C4 and move outward simultaneously. Consensus first two-hand scale exercise.",
         "default_bpm": 60,
         "hand": "both",
-        "notes": _contrary_motion_c_major(),
+        "tracks": dict(zip(["right", "left"], _contrary_motion_c_major())),
     },
     {
         "id": "exercises/broken_chord_c",
