@@ -75,11 +75,11 @@ class AudioPlayer:
 
         events.sort(key=lambda x: x[0])
 
-        start_time = time.time()
+        start_time = time.monotonic()
         for event_time, is_on, note, velocity in events:
             if stop_event and stop_event.is_set():
                 break
-            wait = event_time - (time.time() - start_time)
+            wait = event_time - (time.monotonic() - start_time)
             if wait > 0:
                 if stop_event:
                     stop_event.wait(timeout=wait)

@@ -127,8 +127,8 @@ document.addEventListener("DOMContentLoaded", () => {
     LessonUI.updateHint(expected.length > 0 ? expected : null);
     LessonUI.updateScore(state);
 
-    // Sync BPM slider
-    if (state.bpm && state.bpm !== currentBpm) {
+    // Sync BPM slider (use !== undefined so BPM=0 is not skipped)
+    if (state.bpm !== undefined && state.bpm !== currentBpm) {
       currentBpm = state.bpm;
       document.getElementById("bpm-slider").value = currentBpm;
       document.getElementById("bpm-display").textContent = currentBpm;
@@ -203,11 +203,19 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("midi-file-input").addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+    if (file.size > MAX_BYTES) {
+      alert(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 10 MB.`);
+      e.target.value = "";
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
+      // Use Uint8Array + btoa via spread for correct binary encoding
       const bytes = new Uint8Array(reader.result);
-      let binary = "";
-      for (const byte of bytes) binary += String.fromCharCode(byte);
+      const binary = bytes.reduce((acc, b) => acc + String.fromCharCode(b), "");
       WS.send({
         type: "load_midi",
         filename: file.name,

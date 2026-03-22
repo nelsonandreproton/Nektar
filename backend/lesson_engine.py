@@ -56,7 +56,7 @@ class LessonEngine:
         beat_hand: Dict[float, str] = {}
 
         for n in raw_notes:
-            beat = round(float(n["beat"]), 6)
+            beat = round(float(n["beat"]), 4)
             if beat not in beat_groups:
                 beat_groups[beat] = set()
                 beat_duration[beat] = float(n.get("duration", 1.0))
@@ -113,14 +113,20 @@ class LessonEngine:
         self._wrong_notes = set()
 
     def set_hand(self, hand: str):
+        if hand not in ("right", "left", "both"):
+            raise ValueError(f"Invalid hand: {hand!r}")
         self._hand = hand
         if self._lesson:
             self._build_steps()
 
     def set_bpm(self, bpm: float):
+        if not isinstance(bpm, (int, float)):
+            raise ValueError("BPM must be numeric")
         self._bpm = max(20.0, min(float(bpm), 240.0))
 
     def set_mode(self, mode: str):
+        if mode not in ("wait", "metronome"):
+            raise ValueError(f"Invalid mode: {mode!r}")
         self._mode = mode
 
     # ── Input processing ──────────────────────────────────────────────────────

@@ -85,9 +85,11 @@ const Keyboard = (() => {
     }
   }
 
-  // Rebuild on window resize
+  // Rebuild on window resize (debounced to avoid flicker on rapid resize)
+  let _resizeTimer = null;
   window.addEventListener("resize", () => {
-    build();
+    clearTimeout(_resizeTimer);
+    _resizeTimer = setTimeout(build, 150);
   });
 
   /**
@@ -96,6 +98,7 @@ const Keyboard = (() => {
    * on: true to add, false to remove
    */
   function setState(midi, state, on) {
+    if (midi < 0 || midi > 127) return;   // guard against invalid MIDI notes
     if (!keyEls[midi]) return;
     const el = keyEls[midi];
     const states = keyStates[midi];

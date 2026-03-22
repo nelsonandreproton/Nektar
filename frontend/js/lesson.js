@@ -28,17 +28,29 @@ const LessonUI = (() => {
       el.className = "lesson-item" + (l.id === activeLessonId ? " active" : "");
       el.dataset.id = l.id;
 
-      const dots = [1,2,3,4,5].map(i =>
-        `<span class="diff-dot${i <= l.difficulty ? " filled" : ""}"></span>`
-      ).join("");
+      const titleEl = document.createElement("div");
+      titleEl.className = "lesson-item-title";
+      titleEl.textContent = l.title;  // textContent prevents XSS
 
-      el.innerHTML = `
-        <div class="lesson-item-title">${l.title}</div>
-        <div class="lesson-item-meta">
-          <span class="diff-dots">${dots}</span>
-          <span> · ${_handLabel(l.hand)}</span>
-        </div>
-      `;
+      const metaEl = document.createElement("div");
+      metaEl.className = "lesson-item-meta";
+
+      const dotsEl = document.createElement("span");
+      dotsEl.className = "diff-dots";
+      for (let i = 1; i <= 5; i++) {
+        const dot = document.createElement("span");
+        dot.className = "diff-dot" + (i <= l.difficulty ? " filled" : "");
+        dotsEl.appendChild(dot);
+      }
+
+      const handEl = document.createElement("span");
+      handEl.textContent = " · " + _handLabel(l.hand);
+
+      metaEl.appendChild(dotsEl);
+      metaEl.appendChild(handEl);
+      el.appendChild(titleEl);
+      el.appendChild(metaEl);
+
       el.addEventListener("click", () => selectLesson(l));
       list.appendChild(el);
     }
@@ -52,10 +64,16 @@ const LessonUI = (() => {
     document.getElementById("lesson-desc").textContent  = lesson.description;
 
     const badges = document.getElementById("lesson-badges");
-    badges.innerHTML = `
-      <span class="badge cat-${lesson.category}">${_catLabel(lesson.category)}</span>
-      <span class="badge">${_handLabel(lesson.hand)}</span>
-    `;
+    badges.innerHTML = "";
+    const SAFE_CATS = new Set(["scales", "exercises", "chords", "songs"]);
+    const catBadge = document.createElement("span");
+    catBadge.className = "badge" + (SAFE_CATS.has(lesson.category) ? ` cat-${lesson.category}` : "");
+    catBadge.textContent = _catLabel(lesson.category);
+    const handBadge = document.createElement("span");
+    handBadge.className = "badge";
+    handBadge.textContent = _handLabel(lesson.hand);
+    badges.appendChild(catBadge);
+    badges.appendChild(handBadge);
 
     document.getElementById("btn-reference").disabled = false;
     document.getElementById("btn-start").disabled = false;
@@ -118,13 +136,13 @@ const LessonUI = (() => {
 
   // ── Hint area ──────────────────────────────────────────────────────────────
 
-  let hintMidiSet = new Set();
+  let chipCache = new Map();  // midi → chip element
 
   function updateHint(expectedNotes) {
     const label = document.getElementById("hint-label");
     const chips = document.getElementById("hint-notes");
 
-    hintMidiSet = new Set(expectedNotes || []);
+    chipCache = new Map();
 
     if (!expectedNotes || expectedNotes.length === 0) {
       label.textContent = "Select a lesson and press Start";
@@ -140,11 +158,12 @@ const LessonUI = (() => {
       chip.dataset.midi = midi;
       chip.textContent = Keyboard.noteName(midi);
       chips.appendChild(chip);
+      chipCache.set(midi, chip);
     }
   }
 
   function markChipPressed(midi, on) {
-    const chip = document.querySelector(`.hint-note-chip[data-midi="${midi}"]`);
+    const chip = chipCache.get(midi);
     if (chip) chip.classList.toggle("pressed", on);
   }
 

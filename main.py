@@ -4,30 +4,33 @@ import os
 import sys
 import threading
 import webbrowser
+from functools import partial
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 
 HTTP_PORT = 8080
 WS_PORT = 8765
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "frontend"))
 
 
-class SilentHandler(SimpleHTTPRequestHandler):
-    """SimpleHTTPRequestHandler with suppressed console output."""
+class FrontendHandler(SimpleHTTPRequestHandler):
+    """Serve files from FRONTEND_DIR without touching the process working directory."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=FRONTEND_DIR, **kwargs)
 
     def log_message(self, fmt, *args):
-        pass
+        pass  # suppress per-request console noise
 
 
 def run_http_server():
-    os.chdir(FRONTEND_DIR)
-    server = HTTPServer(("localhost", HTTP_PORT), SilentHandler)
+    server = HTTPServer(("localhost", HTTP_PORT), FrontendHandler)
     server.serve_forever()
 
 
 async def main():
     from backend.websocket_server import PianoServer
 
-    # Start static file server in a background thread
+    # Start static file server in a background thread (no chdir)
     http_thread = threading.Thread(target=run_http_server, daemon=True)
     http_thread.start()
 
