@@ -5,9 +5,12 @@
 document.addEventListener("DOMContentLoaded", () => {
 
   // ── State ──────────────────────────────────────────────────────────────────
-  let currentHand = "right";
-  let currentBpm  = 60;
-  let lessonStatus = "idle";  // idle | playing | completed
+  let currentHand     = "right";
+  let currentBpm      = 60;
+  let currentMode     = "wait";
+  let lessonStatus    = "idle";   // idle | playing | completed
+  let loopPending     = false;    // waiting to set loop end on next press
+  let loopStartStep   = null;
 
   // ── WebSocket lifecycle ────────────────────────────────────────────────────
 
@@ -31,11 +34,9 @@ document.addEventListener("DOMContentLoaded", () => {
       const opt = document.createElement("option");
       opt.value = name;
       opt.textContent = name;
-      // Auto-select Nektar
       if (name.toLowerCase().includes("nektar")) opt.selected = true;
       sel.appendChild(opt);
     }
-    // Auto-connect if Nektar found
     if (sel.value) connectDevice(sel.value);
   });
 
@@ -69,15 +70,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.addEventListener("ws:lesson_loaded", (e) => {
     LessonUI.addImportedLesson(e.detail.summary);
-    document.getElementById("btn-start").disabled = false;
+    document.getElementById("btn-start").disabled     = false;
     document.getElementById("btn-reference").disabled = false;
   });
 
   // ── MIDI input events ──────────────────────────────────────────────────────
 
   window.addEventListener("ws:note_on", (e) => {
-    const { note, result } = e.detail;
+    const { note, result, velocity } = e.detail;
     Keyboard.setState(note, "pressed", true);
+    Keyboard.setVelocity(note, velocity || 80);
     LessonUI.markChipPressed(note, true);
 
     if (result === "correct") {
@@ -95,6 +97,17 @@ document.addEventListener("DOMContentLoaded", () => {
     LessonUI.markChipPressed(note, false);
   });
 
+  // ── Sustain pedal ──────────────────────────────────────────────────────────
+
+  window.addEventListener("ws:pedal", (e) => {
+    const { on } = e.detail;
+    const indicator = document.getElementById("pedal-indicator");
+    if (indicator) {
+      indicator.textContent = on ? "⬛ Pedal ↓" : "⬛ Pedal";
+      indicator.classList.toggle("pedal-on", on);
+    }
+  });
+
   // ── Lesson state updates ───────────────────────────────────────────────────
 
   window.addEventListener("ws:lesson_state", (e) => {
@@ -107,31 +120,50 @@ document.addEventListener("DOMContentLoaded", () => {
 
     Keyboard.clearAll();
     LessonUI.updateHint(null);
+    LessonUI.updateNextNotes([]);
+    StaffView.update([]);
 
-    const pct = score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0;
+    const pct   = score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0;
     const emoji = pct === 100 ? "🎉" : pct >= 80 ? "🎹" : "👍";
     document.getElementById("hint-label").textContent =
       `${emoji} Complete! Accuracy: ${pct}%  (${score.correct}/${score.total} correct)`;
 
-    document.getElementById("btn-stop").disabled = true;
+    document.getElementById("btn-stop").disabled  = true;
     document.getElementById("btn-start").disabled = false;
+
+    // Persist completion
+    const lessonId = LessonUI.getActiveLessonId();
+    if (pct >= 70 && lessonId) {
+      LessonUI.markLessonComplete(lessonId);
+    }
+
+    // Record session stats
+    Session.recordResult(score.correct, score.wrong);
   });
 
   function applyState(state) {
     if (!state) return;
     lessonStatus = state.status;
 
-    // Update hint / expected keys
-    const expected = state.current_expected || [];
+    // Update hint + expected keys
+    const expected   = state.current_expected   || [];
+    const fingering  = state.current_fingering  || {};
+    const nextNotes  = state.next_notes         || [];
+
     Keyboard.setExpected(expected);
-    LessonUI.updateHint(expected.length > 0 ? expected : null);
+    Keyboard.setFingering(fingering);
+    LessonUI.updateHint(expected.length > 0 ? expected : null, fingering);
+    LessonUI.updateNextNotes(nextNotes);
     LessonUI.updateScore(state);
 
-    // Sync BPM slider (use !== undefined so BPM=0 is not skipped)
+    // Update staff view
+    StaffView.update(expected);
+
+    // Sync BPM slider
     if (state.bpm !== undefined && state.bpm !== currentBpm) {
       currentBpm = state.bpm;
-      document.getElementById("bpm-slider").value = currentBpm;
-      document.getElementById("bpm-display").textContent = currentBpm;
+      document.getElementById("bpm-slider").value        = Math.round(currentBpm);
+      document.getElementById("bpm-display").textContent = Math.round(currentBpm);
     }
 
     // Sync hand buttons
@@ -142,10 +174,25 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
+    // Sync mode buttons
+    if (state.mode && state.mode !== currentMode) {
+      currentMode = state.mode;
+      document.querySelectorAll(".seg-btn[data-mode]").forEach(b => {
+        b.classList.toggle("active", b.dataset.mode === currentMode);
+      });
+    }
+
+    // Sync auto-speed toggle
+    const autoToggle = document.getElementById("auto-speed-toggle");
+    if (autoToggle && autoToggle.checked !== state.auto_speed) {
+      autoToggle.checked = state.auto_speed;
+    }
+
     // Button visibility
     const playing = state.status === "playing";
-    document.getElementById("btn-stop").disabled = !playing;
+    document.getElementById("btn-stop").disabled  = !playing;
     document.getElementById("btn-start").disabled = playing;
+    document.getElementById("btn-set-loop").disabled = !playing;
   }
 
   // ── Playback events ────────────────────────────────────────────────────────
@@ -164,7 +211,11 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!id) return;
     Keyboard.clearAll();
     LessonUI.resetScore();
+    loopPending   = false;
+    loopStartStep = null;
     WS.send({ type: "start_lesson", lesson_id: id, hand: currentHand });
+    Session.startTimer();
+    Session.recordLessonPlayed(id);
   });
 
   document.getElementById("btn-stop").addEventListener("click", () => {
@@ -172,6 +223,10 @@ document.addEventListener("DOMContentLoaded", () => {
     WS.send({ type: "stop_reference" });
     Keyboard.clearAll();
     LessonUI.updateHint(null);
+    LessonUI.updateNextNotes([]);
+    StaffView.update([]);
+    loopPending   = false;
+    loopStartStep = null;
   });
 
   document.getElementById("btn-reference").addEventListener("click", () => {
@@ -189,8 +244,19 @@ document.addEventListener("DOMContentLoaded", () => {
     WS.send({ type: "set_hand", hand: currentHand });
   });
 
+  // Mode selector (wait / drill)
+  document.getElementById("mode-btns").addEventListener("click", (e) => {
+    const btn = e.target.closest(".seg-btn[data-mode]");
+    if (!btn) return;
+    currentMode = btn.dataset.mode;
+    document.querySelectorAll(".seg-btn[data-mode]").forEach(b =>
+      b.classList.toggle("active", b.dataset.mode === currentMode)
+    );
+    WS.send({ type: "set_mode", mode: currentMode });
+  });
+
   // BPM slider
-  const bpmSlider = document.getElementById("bpm-slider");
+  const bpmSlider  = document.getElementById("bpm-slider");
   const bpmDisplay = document.getElementById("bpm-display");
   bpmSlider.addEventListener("input", () => {
     currentBpm = parseInt(bpmSlider.value);
@@ -198,13 +264,52 @@ document.addEventListener("DOMContentLoaded", () => {
     WS.send({ type: "set_bpm", bpm: currentBpm });
   });
 
+  // Auto-speed toggle
+  document.getElementById("auto-speed-toggle").addEventListener("change", (e) => {
+    WS.send({ type: "set_auto_speed", enabled: e.target.checked });
+  });
+
+  // ── Loop section ───────────────────────────────────────────────────────────
+
+  document.getElementById("btn-set-loop").addEventListener("click", _handleLoopBtn);
+  document.getElementById("btn-clear-loop").addEventListener("click", () => {
+    WS.send({ type: "clear_loop" });
+    loopPending   = false;
+    loopStartStep = null;
+    document.getElementById("btn-set-loop").textContent = "[ Loop ]";
+  });
+
+  function _handleLoopBtn() {
+    if (lessonStatus !== "playing") return;
+    // We read current step from the most recent state via score bar
+    const stepText = document.getElementById("score-step").textContent;
+    const match    = stepText.match(/^(\d+)\s*\/\s*(\d+)/);
+    if (!match) return;
+    const currentStep = parseInt(match[1]);
+
+    if (!loopPending) {
+      // First press: mark start
+      loopStartStep = currentStep;
+      loopPending   = true;
+      document.getElementById("btn-set-loop").textContent = "[ End ]";
+    } else {
+      // Second press: set end
+      if (loopStartStep !== null && currentStep > loopStartStep) {
+        WS.send({ type: "set_loop", start: loopStartStep, end: currentStep });
+      }
+      loopPending   = false;
+      loopStartStep = null;
+      document.getElementById("btn-set-loop").textContent = "[ Loop ]";
+    }
+  }
+
   // ── MIDI file import ───────────────────────────────────────────────────────
 
   document.getElementById("midi-file-input").addEventListener("change", (e) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
+    const MAX_BYTES = 10 * 1024 * 1024;
     if (file.size > MAX_BYTES) {
       alert(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 10 MB.`);
       e.target.value = "";
@@ -213,17 +318,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const reader = new FileReader();
     reader.onload = () => {
-      // Use Uint8Array + btoa via spread for correct binary encoding
-      const bytes = new Uint8Array(reader.result);
+      const bytes  = new Uint8Array(reader.result);
       const binary = bytes.reduce((acc, b) => acc + String.fromCharCode(b), "");
       WS.send({
-        type: "load_midi",
+        type:     "load_midi",
         filename: file.name,
-        content: btoa(binary),
+        content:  btoa(binary),
       });
     };
     reader.readAsArrayBuffer(file);
-    // Reset so same file can be re-imported
     e.target.value = "";
   });
 
@@ -231,9 +334,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   window.addEventListener("ws:error", (e) => {
     console.warn("[Server error]", e.detail.message);
-    // Simple non-intrusive notification via hint label
     const label = document.getElementById("hint-label");
-    const prev = label.textContent;
+    const prev  = label.textContent;
     label.style.color = "var(--red)";
     label.textContent = "⚠ " + e.detail.message;
     setTimeout(() => {
@@ -241,5 +343,106 @@ document.addEventListener("DOMContentLoaded", () => {
       label.textContent = prev;
     }, 3000);
   });
+
+  // ── Metronome panel ────────────────────────────────────────────────────────
+
+  const metroPanel = document.getElementById("metronome-panel");
+  document.getElementById("btn-metronome").addEventListener("click", () => {
+    metroPanel.classList.toggle("hidden");
+  });
+  document.getElementById("btn-metro-close").addEventListener("click", () => {
+    metroPanel.classList.add("hidden");
+    Metronome.stop();
+  });
+
+  // ── Note labels toggle ─────────────────────────────────────────────────────
+
+  document.getElementById("labels-toggle").addEventListener("change", (e) => {
+    Keyboard.showAllLabels(e.target.checked);
+  });
+
+  // ── Shortcuts overlay ──────────────────────────────────────────────────────
+
+  const shortcutsOverlay = document.getElementById("shortcuts-overlay");
+  document.getElementById("btn-shortcuts").addEventListener("click", () => {
+    shortcutsOverlay.classList.toggle("hidden");
+  });
+  document.getElementById("btn-shortcuts-close").addEventListener("click", () => {
+    shortcutsOverlay.classList.add("hidden");
+  });
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+
+  document.addEventListener("keydown", (e) => {
+    // Don't fire when typing in an input/select
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+
+    const key = e.key;
+
+    if (key === " " || key === "Spacebar") {
+      e.preventDefault();
+      if (lessonStatus === "playing") {
+        document.getElementById("btn-stop").click();
+      } else {
+        document.getElementById("btn-start").click();
+      }
+    } else if (key === "r" || key === "R") {
+      if (!document.getElementById("btn-reference").disabled) {
+        document.getElementById("btn-reference").click();
+      }
+    } else if (key === "m" || key === "M") {
+      document.getElementById("btn-metronome").click();
+    } else if (key === "d" || key === "D") {
+      // Toggle drill mode
+      currentMode = currentMode === "drill" ? "wait" : "drill";
+      document.querySelectorAll(".seg-btn[data-mode]").forEach(b =>
+        b.classList.toggle("active", b.dataset.mode === currentMode)
+      );
+      WS.send({ type: "set_mode", mode: currentMode });
+    } else if (key === "a" || key === "A") {
+      const toggle = document.getElementById("auto-speed-toggle");
+      toggle.checked = !toggle.checked;
+      toggle.dispatchEvent(new Event("change"));
+    } else if (key === "l" || key === "L") {
+      const btn = document.getElementById("btn-set-loop");
+      if (!btn.disabled) btn.click();
+    } else if (key === "n" || key === "N") {
+      const toggle = document.getElementById("labels-toggle");
+      toggle.checked = !toggle.checked;
+      Keyboard.showAllLabels(toggle.checked);
+    } else if (key === "1") {
+      _selectHand("right");
+    } else if (key === "2") {
+      _selectHand("left");
+    } else if (key === "3") {
+      _selectHand("both");
+    } else if (key === "+" || key === "=") {
+      currentBpm = Math.min(200, currentBpm + 5);
+      _syncBpm(currentBpm);
+    } else if (key === "-") {
+      currentBpm = Math.max(20, currentBpm - 5);
+      _syncBpm(currentBpm);
+    } else if (key === "?" || key === "/") {
+      shortcutsOverlay.classList.toggle("hidden");
+    } else if (key === "Escape") {
+      shortcutsOverlay.classList.add("hidden");
+      document.getElementById("metronome-panel").classList.add("hidden");
+      document.getElementById("session-panel").classList.add("hidden");
+    }
+  });
+
+  function _selectHand(hand) {
+    currentHand = hand;
+    document.querySelectorAll(".seg-btn[data-hand]").forEach(b =>
+      b.classList.toggle("active", b.dataset.hand === hand)
+    );
+    WS.send({ type: "set_hand", hand });
+  }
+
+  function _syncBpm(bpm) {
+    bpmSlider.value       = bpm;
+    bpmDisplay.textContent = bpm;
+    WS.send({ type: "set_bpm", bpm });
+  }
 
 });

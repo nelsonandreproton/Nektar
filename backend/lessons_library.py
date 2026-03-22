@@ -1,23 +1,44 @@
 """Built-in lesson definitions."""
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 # ── Scale helpers ─────────────────────────────────────────────────────────────
 
 MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11, 12]
 NATURAL_MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10, 12]
+CHROMATIC_INTERVALS = list(range(13))  # 0..12
+
+# Standard RH fingering for major scale (one octave up + down):
+# Up:   1 2 3 1 2 3 4 5
+# Down: 5 4 3 2 1 3 2 1
+_RH_MAJOR_FINGERING = [1, 2, 3, 1, 2, 3, 4, 5, 4, 3, 2, 1, 3, 2, 1]
+
+# Standard LH fingering for major scale (one octave up + down, starting C3):
+# Up:   5 4 3 2 1 3 2 1
+# Down: 1 2 3 1 2 3 4 5
+_LH_MAJOR_FINGERING = [5, 4, 3, 2, 1, 3, 2, 1, 2, 3, 1, 2, 3, 4, 5]
+
+# RH five-finger: 1 2 3 4 5 4 3 2 1
+_RH_FIVE_FINGER = [1, 2, 3, 4, 5, 4, 3, 2, 1]
+_LH_FIVE_FINGER = [5, 4, 3, 2, 1, 2, 3, 4, 5]
 
 
-def _scale_notes(root: int, intervals: List[int], hand: str = "right") -> List[dict]:
+def _scale_notes(root: int, intervals: List[int], hand: str = "right",
+                 fingering: Optional[List[int]] = None) -> List[dict]:
     """One octave up then back down (excluding repeated top note)."""
     up = [root + i for i in intervals]
     down = list(reversed(up[:-1]))
-    return [
-        {"note": n, "beat": float(i), "duration": 1.0, "hand": hand}
-        for i, n in enumerate(up + down)
-    ]
+    all_notes = up + down
+    result = []
+    for i, n in enumerate(all_notes):
+        note: dict = {"note": n, "beat": float(i), "duration": 1.0, "hand": hand}
+        if fingering and i < len(fingering):
+            note["finger"] = fingering[i]
+        result.append(note)
+    return result
 
 
-def _make_scale(lesson_id, title, root, intervals, hand, bpm=60, difficulty=1, desc=""):
+def _make_scale(lesson_id, title, root, intervals, hand, bpm=60, difficulty=1, desc="",
+                fingering=None):
     return {
         "id": lesson_id,
         "title": title,
@@ -26,30 +47,34 @@ def _make_scale(lesson_id, title, root, intervals, hand, bpm=60, difficulty=1, d
         "description": desc or title,
         "default_bpm": bpm,
         "hand": hand,
-        "notes": _scale_notes(root, intervals, hand),
+        "notes": _scale_notes(root, intervals, hand, fingering),
     }
 
 
 # ── Exercise helpers ──────────────────────────────────────────────────────────
 
-def _five_finger(root: int, hand: str = "right") -> List[dict]:
+def _five_finger(root: int, hand: str = "right", fingering: Optional[List[int]] = None) -> List[dict]:
     """Five notes up then down: 1-2-3-4-5-4-3-2-1."""
-    notes = [root, root+2, root+4, root+5, root+7, root+5, root+4, root+2, root]
-    return [{"note": n, "beat": float(i), "duration": 1.0, "hand": hand} for i, n in enumerate(notes)]
+    notes_seq = [root, root+2, root+4, root+5, root+7, root+5, root+4, root+2, root]
+    result = []
+    for i, n in enumerate(notes_seq):
+        note: dict = {"note": n, "beat": float(i), "duration": 1.0, "hand": hand}
+        if fingering and i < len(fingering):
+            note["finger"] = fingering[i]
+        result.append(note)
+    return result
 
 
 def _make_hanon1() -> List[dict]:
     """Hanon-style exercise #1: ascending broken pattern across 5 positions."""
-    # Each group: C E F G A G F E (then up by step)
     notes = []
     beat = 0.0
     for pos in range(5):
-        root = 48 + pos * 2  # C3=48, D3=50, E3=52, F3=53, G3=55 (step by major 2nd-ish)
+        root = 48 + pos * 2
         pattern = [root, root+4, root+5, root+7, root+9, root+7, root+5, root+4]
         for n in pattern:
             notes.append({"note": n, "beat": beat, "duration": 0.5, "hand": "right"})
             beat += 0.5
-    # Back down
     for pos in range(4, -1, -1):
         root = 48 + pos * 2
         pattern = [root+9, root+7, root+5, root+4, root+2, root+4, root+5, root+7]
@@ -59,11 +84,66 @@ def _make_hanon1() -> List[dict]:
     return notes
 
 
-# ── Song definitions ──────────────────────────────────────────────────────────
+def _chromatic_scale(root: int = 60, hand: str = "right") -> List[dict]:
+    """Chromatic scale: all 12 semitones up then back down."""
+    # RH chromatic fingering: 1 3 1 3 1 1 3 1 3 1 3 1 / 1 3 1 3 1 3 1 1 3 1 3 1
+    rh_up   = [1, 3, 1, 3, 1, 1, 3, 1, 3, 1, 3, 1, 1]
+    rh_down = list(reversed(rh_up[:-1]))
+    fingering = (rh_up + rh_down) if hand == "right" else None
+    up = list(range(root, root + 13))
+    down = list(reversed(up[:-1]))
+    all_notes = up + down
+    result = []
+    for i, n in enumerate(all_notes):
+        note: dict = {"note": n, "beat": float(i) * 0.5, "duration": 0.5, "hand": hand}
+        if fingering and i < len(fingering):
+            note["finger"] = fingering[i]
+        result.append(note)
+    return result
+
+
+def _alberti_bass() -> List[dict]:
+    """Classic Alberti bass in C, then F, then G7, then C (8 bars, LH)."""
+    notes = []
+    beat = 0.0
+    # Each bar: 4 beats of root-fifth-third-fifth (all quarter notes)
+    progressions = [
+        (48, 52, 55),  # C3-E3-G3  (C major, 2 bars)
+        (48, 52, 55),
+        (53, 57, 60),  # F3-A3-C4  (F major, 2 bars)
+        (53, 57, 60),
+        (43, 47, 50),  # G2-B2-D3  (G major, 2 bars)
+        (43, 47, 50),
+        (48, 52, 55),  # C3-E3-G3  (C major, 2 bars)
+        (48, 52, 55),
+    ]
+    for root, third, fifth in progressions:
+        for _ in range(4):  # 4 beats per bar
+            for n in [root, fifth, third, fifth]:
+                notes.append({"note": n, "beat": beat, "duration": 0.25, "hand": "left"})
+                beat += 0.25
+    return notes
+
+
+def _interval_exercise(roots: List[int], semitones: int, hand: str = "right") -> List[dict]:
+    """Play each root then the note {semitones} above it (2 notes per pair)."""
+    notes = []
+    beat = 0.0
+    for root in roots:
+        notes.append({"note": root, "beat": beat, "duration": 1.0, "hand": hand})
+        beat += 1.0
+        notes.append({"note": root + semitones, "beat": beat, "duration": 1.0, "hand": hand})
+        beat += 1.0
+    return notes
+
+
+# ── Song note helper ──────────────────────────────────────────────────────────
 
 def _note(n, b, d=1.0, h="right", v=80):
     return {"note": n, "beat": b, "duration": d, "hand": h, "velocity": v}
 
+
+# ── Song / piece definitions ──────────────────────────────────────────────────
 
 MARY_NOTES = [
     _note(64, 0), _note(62, 1), _note(60, 2), _note(62, 3),
@@ -151,6 +231,55 @@ FUR_ELISE_RH = [
     _note(69, 22, 1.5),
 ]
 
+# Jingle Bells chorus (well-known melody, RH)
+JINGLE_BELLS_NOTES = [
+    # "Jingle bells, jingle bells, jingle all the way"
+    _note(64, 0), _note(64, 1), _note(64, 2, 2),      # E E E(half)
+    _note(64, 4), _note(64, 5), _note(64, 6, 2),      # E E E(half)
+    _note(64, 8), _note(67, 9), _note(60, 10), _note(62, 11),  # E G C D
+    _note(64, 12, 4),                                  # E (whole)
+    # "Oh what fun it is to ride..."
+    _note(65, 16), _note(65, 17), _note(65, 18), _note(65, 19),  # F F F F
+    _note(65, 20), _note(64, 21), _note(64, 22), _note(64, 23),  # F E E E
+    _note(64, 24), _note(62, 25), _note(62, 26), _note(64, 27),  # E D D E
+    _note(62, 28, 2), _note(67, 30, 2),                           # D(half) G(half)
+    # "Jingle bells, jingle bells, jingle all the way"
+    _note(64, 32), _note(64, 33), _note(64, 34, 2),
+    _note(64, 36), _note(64, 37), _note(64, 38, 2),
+    _note(64, 40), _note(67, 41), _note(60, 42), _note(62, 43),
+    _note(64, 44, 4),
+    # "Oh what fun it is to ride in a one-horse open sleigh!"
+    _note(65, 48), _note(65, 49), _note(65, 50), _note(65, 51),
+    _note(65, 52), _note(64, 53), _note(64, 54), _note(64, 55),
+    _note(67, 56), _note(67, 57), _note(65, 58), _note(62, 59),
+    _note(60, 60, 4),
+]
+
+
+def _bach_prelude_c() -> List[dict]:
+    """Bach Prelude in C (BWV 846) — simplified first 8 bars, broken-chord arpeggios (RH)."""
+    # Each bar: 4 pairs of notes (8 eighth notes) ascending arpeggio, repeated
+    chords = [
+        [60, 64, 67, 72],  # C major  (C4 E4 G4 C5)
+        [60, 62, 69, 74],  # Dm7/C   (C4 D4 A4 D5)
+        [59, 62, 67, 74],  # G7/B    (B3 D4 G4 D5)
+        [57, 60, 64, 69],  # Am      (A3 C4 E4 A4)
+        [57, 60, 65, 69],  # F/A     (A3 C4 F4 A4)
+        [55, 59, 62, 67],  # G/B     (G3 B3 D4 G4)
+        [60, 64, 67, 72],  # C major (repeat)
+        [48, 55, 62, 67],  # G7 low  (C3 G3 D4 G4)
+    ]
+    notes = []
+    beat = 0.0
+    for chord in chords:
+        # Play arpeggio up twice per bar (8 eighth notes)
+        for rep in range(2):
+            for n in chord:
+                notes.append(_note(n, beat, 0.5))
+                beat += 0.5
+    return notes
+
+
 # ── Chord progressions ────────────────────────────────────────────────────────
 
 def _chord(notes, beat, duration=2.0, hand="right"):
@@ -189,19 +318,37 @@ def _make_am_progression():
     return notes
 
 
+# ── Find-the-Note trainer — 20 fixed notes spanning C3–C6 ────────────────────
+
+_FIND_NOTE_ROOTS = [
+    48, 53, 57, 62, 65, 69, 72, 76, 79, 55,
+    60, 64, 67, 71, 74, 50, 56, 61, 68, 75,
+]
+
+
+def _find_the_note_lesson() -> List[dict]:
+    """20 notes spread across the keyboard — find each one."""
+    return [
+        {"note": n, "beat": float(i), "duration": 1.0, "hand": "right"}
+        for i, n in enumerate(_FIND_NOTE_ROOTS)
+    ]
+
+
 # ── The full lesson library ───────────────────────────────────────────────────
 
 LESSONS: List[dict] = [
-    # --- SCALES ---
+    # ── SCALES ──────────────────────────────────────────────────────────────
     _make_scale(
         "scales/c_major_rh", "C Major Scale — Right Hand",
         60, MAJOR_INTERVALS, "right", bpm=60,
         desc="The foundation of all scales. One octave up and down.",
+        fingering=_RH_MAJOR_FINGERING,
     ),
     _make_scale(
         "scales/c_major_lh", "C Major Scale — Left Hand",
         48, MAJOR_INTERVALS, "left", bpm=60,
         desc="C major scale starting from C3 with your left hand.",
+        fingering=_LH_MAJOR_FINGERING,
     ),
     {
         "id": "scales/c_major_both",
@@ -212,14 +359,15 @@ LESSONS: List[dict] = [
         "default_bpm": 50,
         "hand": "both",
         "tracks": {
-            "right": _scale_notes(60, MAJOR_INTERVALS, "right"),
-            "left":  _scale_notes(48, MAJOR_INTERVALS, "left"),
+            "right": _scale_notes(60, MAJOR_INTERVALS, "right", _RH_MAJOR_FINGERING),
+            "left":  _scale_notes(48, MAJOR_INTERVALS, "left",  _LH_MAJOR_FINGERING),
         },
     },
     _make_scale(
         "scales/g_major_rh", "G Major Scale — Right Hand",
         55, MAJOR_INTERVALS, "right", bpm=60, difficulty=1,
         desc="G major scale (one sharp: F#). Starting G3.",
+        fingering=_RH_MAJOR_FINGERING,
     ),
     _make_scale(
         "scales/f_major_rh", "F Major Scale — Right Hand",
@@ -246,8 +394,18 @@ LESSONS: List[dict] = [
         57, NATURAL_MINOR_INTERVALS, "right", bpm=60, difficulty=1,
         desc="A natural minor: the relative minor of C major. No sharps or flats.",
     ),
+    {
+        "id": "scales/chromatic_rh",
+        "title": "Chromatic Scale — Right Hand",
+        "category": "scales",
+        "difficulty": 2,
+        "description": "All 12 semitones: C4 up to C5 and back. Builds awareness of every key.",
+        "default_bpm": 60,
+        "hand": "right",
+        "notes": _chromatic_scale(60, "right"),
+    },
 
-    # --- EXERCISES ---
+    # ── EXERCISES ────────────────────────────────────────────────────────────
     {
         "id": "exercises/five_finger_c",
         "title": "Five-Finger Exercise in C",
@@ -256,7 +414,17 @@ LESSONS: List[dict] = [
         "description": "1-2-3-4-5 and back down. Basic finger independence.",
         "default_bpm": 60,
         "hand": "right",
-        "notes": _five_finger(60, "right"),
+        "notes": _five_finger(60, "right", _RH_FIVE_FINGER),
+    },
+    {
+        "id": "exercises/five_finger_lh",
+        "title": "Five-Finger Exercise in C — Left Hand",
+        "category": "exercises",
+        "difficulty": 1,
+        "description": "LH five-finger exercise: 5-4-3-2-1 and back up.",
+        "default_bpm": 60,
+        "hand": "left",
+        "notes": _five_finger(48, "left", _LH_FIVE_FINGER),
     },
     {
         "id": "exercises/hanon_1",
@@ -268,8 +436,48 @@ LESSONS: List[dict] = [
         "hand": "right",
         "notes": _make_hanon1(),
     },
+    {
+        "id": "exercises/alberti_bass",
+        "title": "Alberti Bass in C",
+        "category": "exercises",
+        "difficulty": 2,
+        "description": "Classic LH accompaniment pattern (root-fifth-third-fifth). C–F–G–C progression.",
+        "default_bpm": 60,
+        "hand": "left",
+        "notes": _alberti_bass(),
+    },
+    {
+        "id": "exercises/intervals_thirds",
+        "title": "Interval Exercise: Major & Minor 3rds",
+        "category": "exercises",
+        "difficulty": 2,
+        "description": "Play each root then the third above. Trains the most common interval in chords.",
+        "default_bpm": 60,
+        "hand": "right",
+        "notes": _interval_exercise([60, 62, 64, 65, 67, 69, 71, 72], 4),  # major thirds up C scale
+    },
+    {
+        "id": "exercises/intervals_fifths",
+        "title": "Interval Exercise: Perfect 5ths",
+        "category": "exercises",
+        "difficulty": 2,
+        "description": "Play each root then the fifth above. The most stable interval in Western music.",
+        "default_bpm": 60,
+        "hand": "right",
+        "notes": _interval_exercise([60, 62, 64, 65, 67, 69, 71, 72], 7),  # perfect fifths
+    },
+    {
+        "id": "exercises/intervals_octaves",
+        "title": "Interval Exercise: Octaves",
+        "category": "exercises",
+        "difficulty": 3,
+        "description": "Play each note then the octave above. Stretches the hand and trains position jumps.",
+        "default_bpm": 50,
+        "hand": "right",
+        "notes": _interval_exercise([60, 62, 64, 65, 67], 12),
+    },
 
-    # --- CHORDS ---
+    # ── CHORDS ───────────────────────────────────────────────────────────────
     {
         "id": "chords/basic_triads",
         "title": "Basic Triads: C Am F G7",
@@ -301,7 +509,7 @@ LESSONS: List[dict] = [
         "notes": _make_am_progression(),
     },
 
-    # --- SONGS ---
+    # ── SONGS ────────────────────────────────────────────────────────────────
     {
         "id": "songs/mary_had_a_little_lamb",
         "title": "Mary Had a Little Lamb",
@@ -331,6 +539,16 @@ LESSONS: List[dict] = [
         "default_bpm": 70,
         "hand": "right",
         "notes": HAPPY_BIRTHDAY_NOTES,
+    },
+    {
+        "id": "songs/jingle_bells",
+        "title": "Jingle Bells",
+        "category": "songs",
+        "difficulty": 1,
+        "description": "The famous chorus. Uses C D E F G — all white keys.",
+        "default_bpm": 100,
+        "hand": "right",
+        "notes": JINGLE_BELLS_NOTES,
     },
     {
         "id": "songs/ode_to_joy_rh",
@@ -364,6 +582,48 @@ LESSONS: List[dict] = [
         "default_bpm": 60,
         "hand": "right",
         "notes": FUR_ELISE_RH,
+    },
+    {
+        "id": "songs/bach_prelude_c",
+        "title": "Bach Prelude in C (Simplified)",
+        "category": "songs",
+        "difficulty": 3,
+        "description": "BWV 846 broken-chord arpeggios. First 8 bars, right hand only. Pure chord exploration.",
+        "default_bpm": 60,
+        "hand": "right",
+        "notes": _bach_prelude_c(),
+    },
+
+    # ── TRAINER ──────────────────────────────────────────────────────────────
+    {
+        "id": "trainer/find_the_note",
+        "title": "Find the Note",
+        "category": "trainer",
+        "difficulty": 1,
+        "description": "20 notes spread across the keyboard. Find each highlighted key — trains keyboard geography.",
+        "default_bpm": 999,   # no tempo — wait mode only
+        "hand": "right",
+        "notes": _find_the_note_lesson(),
+    },
+    {
+        "id": "trainer/keyboard_thirds",
+        "title": "Keyboard Trainer: Thirds",
+        "category": "trainer",
+        "difficulty": 2,
+        "description": "Play a root then the major third above it. Trains interval recognition across the keyboard.",
+        "default_bpm": 60,
+        "hand": "right",
+        "notes": _interval_exercise([60, 64, 67, 71, 74, 55, 59, 62, 65, 69], 4),
+    },
+    {
+        "id": "trainer/keyboard_fifths",
+        "title": "Keyboard Trainer: Perfect 5ths",
+        "category": "trainer",
+        "difficulty": 2,
+        "description": "Play a root then the perfect fifth above. Master the most important interval.",
+        "default_bpm": 60,
+        "hand": "right",
+        "notes": _interval_exercise([60, 62, 64, 65, 67, 69, 71, 55, 57, 59], 7),
     },
 ]
 

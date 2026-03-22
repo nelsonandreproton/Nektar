@@ -1,12 +1,35 @@
 /**
  * Lesson UI: renders the lesson list, manages hint chips, score display,
- * and result flash animations.
+ * result flash animations, and lesson completion persistence.
  */
 const LessonUI = (() => {
-  let allLessons = [];
+  let allLessons     = [];
   let activeCategory = "all";
   let activeLessonId = null;
-  let lastState = null;
+  let lastState      = null;
+
+  // localStorage key for completed lessons
+  const COMPLETED_KEY = "nektar_completed_lessons";
+
+  function _loadCompleted() {
+    try {
+      return new Set(JSON.parse(localStorage.getItem(COMPLETED_KEY) || "[]"));
+    } catch { return new Set(); }
+  }
+
+  function _saveCompleted(set) {
+    try {
+      localStorage.setItem(COMPLETED_KEY, JSON.stringify([...set]));
+    } catch {}
+  }
+
+  let completedLessons = _loadCompleted();
+
+  function markLessonComplete(lessonId) {
+    completedLessons.add(lessonId);
+    _saveCompleted(completedLessons);
+    _filterAndRender();
+  }
 
   // ── Lesson list ────────────────────────────────────────────────────────────
 
@@ -25,12 +48,15 @@ const LessonUI = (() => {
 
     for (const l of filtered) {
       const el = document.createElement("div");
-      el.className = "lesson-item" + (l.id === activeLessonId ? " active" : "");
+      const isDone = completedLessons.has(l.id);
+      el.className = "lesson-item"
+        + (l.id === activeLessonId ? " active" : "")
+        + (isDone ? " completed" : "");
       el.dataset.id = l.id;
 
       const titleEl = document.createElement("div");
       titleEl.className = "lesson-item-title";
-      titleEl.textContent = l.title;  // textContent prevents XSS
+      titleEl.textContent = l.title;
 
       const metaEl = document.createElement("div");
       metaEl.className = "lesson-item-meta";
@@ -65,7 +91,7 @@ const LessonUI = (() => {
 
     const badges = document.getElementById("lesson-badges");
     badges.innerHTML = "";
-    const SAFE_CATS = new Set(["scales", "exercises", "chords", "songs"]);
+    const SAFE_CATS = new Set(["scales", "exercises", "chords", "songs", "trainer"]);
     const catBadge = document.createElement("span");
     catBadge.className = "badge" + (SAFE_CATS.has(lesson.category) ? ` cat-${lesson.category}` : "");
     catBadge.textContent = _catLabel(lesson.category);
@@ -76,17 +102,17 @@ const LessonUI = (() => {
     badges.appendChild(handBadge);
 
     document.getElementById("btn-reference").disabled = false;
-    document.getElementById("btn-start").disabled = false;
-    document.getElementById("btn-stop").disabled = true;
+    document.getElementById("btn-start").disabled     = false;
+    document.getElementById("btn-stop").disabled      = true;
 
     resetScore();
     updateHint(null);
+    updateNextNotes([]);
 
     return lesson;
   }
 
   function addImportedLesson(summary) {
-    // Remove previous import if it has the same id
     allLessons = allLessons.filter(l => !l.id.startsWith("midi/"));
     allLessons.unshift(summary);
     selectLesson(summary);
@@ -110,7 +136,7 @@ const LessonUI = (() => {
 
   function updateScore(state) {
     lastState = state;
-    const s = state.score;
+    const s     = state.score;
     const total = state.total_steps;
     const step  = state.current_step;
 
@@ -124,6 +150,51 @@ const LessonUI = (() => {
 
     const fill = total > 0 ? (step / total) * 100 : 0;
     document.getElementById("progress-fill").style.width = fill + "%";
+
+    // Loop markers
+    _updateLoopMarkers(state);
+
+    // Auto-speed streak badge
+    const streakEl = document.getElementById("auto-speed-streak");
+    if (state.auto_speed && state.auto_speed_streak > 0) {
+      streakEl.textContent = `🔥 ${state.auto_speed_streak}`;
+      streakEl.classList.remove("hidden");
+    } else {
+      streakEl.classList.add("hidden");
+    }
+
+    // Auto-speed toggle sync
+    const autoToggle = document.getElementById("auto-speed-toggle");
+    if (autoToggle && autoToggle.checked !== state.auto_speed) {
+      autoToggle.checked = state.auto_speed;
+    }
+  }
+
+  function _updateLoopMarkers(state) {
+    const track  = document.getElementById("progress-track");
+    const startM = document.getElementById("loop-start-marker");
+    const endM   = document.getElementById("loop-end-marker");
+    const badge  = document.getElementById("loop-badge");
+    const clearB = document.getElementById("btn-clear-loop");
+
+    if (!startM || !endM) return;
+
+    if (state.loop_start !== null && state.loop_end !== null) {
+      const total = state.total_steps || 1;
+      const startPct = (state.loop_start / total) * 100;
+      const endPct   = (state.loop_end   / total) * 100;
+      startM.style.left = startPct + "%";
+      endM.style.left   = endPct   + "%";
+      startM.classList.remove("hidden");
+      endM.classList.remove("hidden");
+      badge.classList.remove("hidden");
+      clearB.classList.remove("hidden");
+    } else {
+      startM.classList.add("hidden");
+      endM.classList.add("hidden");
+      badge.classList.add("hidden");
+      clearB.classList.add("hidden");
+    }
   }
 
   function resetScore() {
@@ -132,13 +203,16 @@ const LessonUI = (() => {
     document.getElementById("score-step").textContent    = "0 / 0";
     document.getElementById("score-pct").textContent     = "—";
     document.getElementById("progress-fill").style.width = "0%";
+
+    const streakEl = document.getElementById("auto-speed-streak");
+    if (streakEl) streakEl.classList.add("hidden");
   }
 
   // ── Hint area ──────────────────────────────────────────────────────────────
 
   let chipCache = new Map();  // midi → chip element
 
-  function updateHint(expectedNotes) {
+  function updateHint(expectedNotes, fingeringMap) {
     const label = document.getElementById("hint-label");
     const chips = document.getElementById("hint-notes");
 
@@ -156,9 +230,42 @@ const LessonUI = (() => {
       const chip = document.createElement("div");
       chip.className = "hint-note-chip";
       chip.dataset.midi = midi;
-      chip.textContent = Keyboard.noteName(midi);
+
+      const nameEl = document.createElement("span");
+      nameEl.textContent = Keyboard.noteName(midi);
+      chip.appendChild(nameEl);
+
+      // Fingering sub-label
+      const finger = fingeringMap && fingeringMap[String(midi)];
+      if (finger) {
+        const fEl = document.createElement("span");
+        fEl.className = "finger-num";
+        fEl.textContent = `Finger ${finger}`;
+        chip.appendChild(fEl);
+      }
+
       chips.appendChild(chip);
       chipCache.set(midi, chip);
+    }
+  }
+
+  function updateNextNotes(nextNotes) {
+    const preview = document.getElementById("next-notes-preview");
+    const container = document.getElementById("next-notes");
+    if (!preview || !container) return;
+
+    if (!nextNotes || nextNotes.length === 0) {
+      preview.classList.add("hidden");
+      return;
+    }
+
+    preview.classList.remove("hidden");
+    container.innerHTML = "";
+    for (const midi of nextNotes) {
+      const chip = document.createElement("span");
+      chip.className = "next-note-chip";
+      chip.textContent = Keyboard.noteName(midi);
+      container.appendChild(chip);
     }
   }
 
@@ -171,9 +278,9 @@ const LessonUI = (() => {
 
   function flashResult(type) {
     const el = document.getElementById("result-flash");
-    el.className = "";          // reset
+    el.className = "";
     el.textContent = type === "correct" ? "✓" : "✗";
-    void el.offsetWidth;        // force reflow
+    void el.offsetWidth;  // force reflow
     el.classList.add(type === "correct" ? "show-correct" : "show-wrong");
   }
 
@@ -184,7 +291,10 @@ const LessonUI = (() => {
   }
 
   function _catLabel(cat) {
-    return { scales: "Scale", exercises: "Exercise", chords: "Chord", songs: "Song" }[cat] || cat;
+    return {
+      scales: "Scale", exercises: "Exercise", chords: "Chord",
+      songs: "Song", trainer: "Trainer",
+    }[cat] || cat;
   }
 
   function getActiveLessonId() { return activeLessonId; }
@@ -196,8 +306,10 @@ const LessonUI = (() => {
     updateScore,
     resetScore,
     updateHint,
+    updateNextNotes,
     markChipPressed,
     flashResult,
     getActiveLessonId,
+    markLessonComplete,
   };
 })();

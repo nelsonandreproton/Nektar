@@ -22,9 +22,12 @@ _MAX_CLIENTS    = 8
 _MAX_MSG_BYTES  = 15 * 1024 * 1024   # 15 MB (covers base64-encoded 10 MB MIDI)
 _MAX_B64_BYTES  = 14 * 1024 * 1024   # base64 payload limit
 _VALID_HANDS    = frozenset({"right", "left", "both"})
-_VALID_MODES    = frozenset({"wait", "metronome"})
+_VALID_MODES    = frozenset({"wait", "drill", "metronome"})
 _MAX_NAME_LEN   = 256
 _MAX_ID_LEN     = 128
+
+# Sustain pedal CC number
+_CC_SUSTAIN = 64
 
 
 def _str(msg: dict, key: str, default: str = "", maxlen: int = _MAX_NAME_LEN) -> str:
@@ -179,6 +182,21 @@ class PianoServer:
                 self.engine.set_mode(mode)
                 await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
 
+        elif t == "set_auto_speed":
+            enabled = bool(msg.get("enabled", False))
+            self.engine.set_auto_speed(enabled)
+            await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
+
+        elif t == "set_loop":
+            start = int(_num(msg, "start", 0, 0, 9999))
+            end   = int(_num(msg, "end",   0, 0, 9999))
+            self.engine.set_loop(start, end)
+            await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
+
+        elif t == "clear_loop":
+            self.engine.clear_loop()
+            await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
+
         elif t == "play_reference":
             state = self.engine.get_state()
             hand = _str(msg, "hand") or state.get("hand", "right")
@@ -243,6 +261,13 @@ class PianoServer:
             self.audio.note_off(msg.note)
             self.engine.note_released(msg.note)
             await self._broadcast({"type": "note_off", "note": msg.note})
+
+        elif msg.type == "control_change" and msg.control == _CC_SUSTAIN:
+            # Sustain pedal: value >= 64 means pedal down
+            await self._broadcast({
+                "type": "pedal",
+                "on": msg.value >= 64,
+            })
 
     # ── Reference playback ────────────────────────────────────────────────────
 

@@ -16,11 +16,18 @@
     <button id="btn-refresh-devices" title="Refresh device list">↻</button>
     <span id="device-status" class="status-dot disconnected"></span>
     <span id="device-label">Not connected</span>
+    <span id="pedal-indicator" class="pedal-off" title="Sustain pedal">⬛ Pedal</span>
   </div>
-  <label id="midi-import-label" title="Import a .mid file">
-    📂 Import MIDI
-    <input type="file" id="midi-file-input" accept=".mid,.midi" />
-  </label>
+  <div id="header-tools">
+    <div id="session-timer" title="Practice timer">⏱ 00:00</div>
+    <button id="btn-metronome" title="Standalone metronome (M)">♩ Metro</button>
+    <button id="btn-session-log" title="Session log">📊 Log</button>
+    <button id="btn-shortcuts" title="Keyboard shortcuts (?)">⌨ Keys</button>
+    <label id="midi-import-label" title="Import a .mid file">
+      📂 Import MIDI
+      <input type="file" id="midi-file-input" accept=".mid,.midi" />
+    </label>
+  </div>
 </header>
 
 <!-- ── Main layout ── -->
@@ -34,6 +41,7 @@
       <button class="cat-btn" data-cat="exercises">Exercises</button>
       <button class="cat-btn" data-cat="chords">Chords</button>
       <button class="cat-btn" data-cat="songs">Songs</button>
+      <button class="cat-btn" data-cat="trainer">Trainer</button>
     </div>
     <div id="lesson-list"></div>
   </aside>
@@ -58,10 +66,27 @@
             <button class="seg-btn"        data-hand="both">Both</button>
           </div>
         </div>
+        <!-- Mode selector -->
+        <div class="ctrl-group">
+          <label>Mode</label>
+          <div class="btn-group" id="mode-btns">
+            <button class="seg-btn active" data-mode="wait" title="Wait for correct note">Wait</button>
+            <button class="seg-btn"        data-mode="drill" title="Wrong notes reset the chord attempt">Drill</button>
+          </div>
+        </div>
         <!-- BPM -->
         <div class="ctrl-group">
           <label>BPM <span id="bpm-display">60</span></label>
           <input type="range" id="bpm-slider" min="20" max="200" value="60" />
+        </div>
+        <!-- Auto-speed toggle -->
+        <div class="ctrl-group">
+          <label>Auto BPM</label>
+          <label class="toggle-switch" title="Increase BPM every 5 consecutive correct steps">
+            <input type="checkbox" id="auto-speed-toggle" />
+            <span class="toggle-track"></span>
+          </label>
+          <span id="auto-speed-streak" class="streak-badge hidden"></span>
         </div>
         <!-- Action buttons -->
         <div class="ctrl-group btn-row">
@@ -74,19 +99,47 @@
 
     <!-- Score / progress bar -->
     <div id="score-bar">
-      <div id="progress-track"><div id="progress-fill"></div></div>
+      <div id="progress-track">
+        <div id="progress-fill"></div>
+        <div id="loop-start-marker" class="loop-marker hidden"></div>
+        <div id="loop-end-marker"   class="loop-marker loop-end hidden"></div>
+      </div>
       <div id="score-cells">
         <span class="score-cell correct" id="score-correct">✓ 0</span>
         <span class="score-cell wrong"   id="score-wrong">✗ 0</span>
         <span class="score-cell step"    id="score-step">0 / 0</span>
         <span class="score-cell pct"     id="score-pct">—</span>
+        <span class="score-cell loop-badge hidden" id="loop-badge">⟳ Loop</span>
+        <button id="btn-set-loop"   class="loop-btn" title="Set loop start/end at current step" disabled>[ Loop ]</button>
+        <button id="btn-clear-loop" class="loop-btn hidden" title="Clear loop">✕ Loop</button>
       </div>
     </div>
 
-    <!-- Hint area -->
-    <div id="hint-area">
-      <div id="hint-label">Select a lesson and press <strong>Start</strong></div>
-      <div id="hint-notes"></div>
+    <!-- Hint area + staff -->
+    <div id="content-area">
+      <div id="hint-area">
+        <div id="hint-label">Select a lesson and press <strong>Start</strong></div>
+        <div id="hint-notes"></div>
+        <div id="next-notes-preview" class="hidden">
+          <span class="next-label">Next →</span>
+          <div id="next-notes"></div>
+        </div>
+      </div>
+
+      <!-- VexFlow staff panel -->
+      <div id="staff-panel">
+        <div id="staff-canvas"></div>
+        <div id="staff-controls">
+          <label class="small-toggle" title="Show/hide staff notation">
+            <input type="checkbox" id="staff-toggle" checked />
+            <span>Staff</span>
+          </label>
+          <label class="small-toggle" title="Show note names on all keys">
+            <input type="checkbox" id="labels-toggle" />
+            <span>All Labels</span>
+          </label>
+        </div>
+      </div>
     </div>
 
     <!-- Result flash overlay -->
@@ -98,12 +151,100 @@
 <!-- ── Keyboard ── -->
 <div id="keyboard-container">
   <div id="keyboard"></div>
+  <div id="velocity-bar-row"></div>
+</div>
+
+<!-- ── Metronome panel (hidden by default) ── -->
+<div id="metronome-panel" class="floating-panel hidden">
+  <div class="panel-header">
+    <span>♩ Metronome</span>
+    <button id="btn-metro-close" class="panel-close">✕</button>
+  </div>
+  <div class="panel-body">
+    <div id="metro-beat-display">
+      <span class="beat-light" id="beat-0"></span>
+      <span class="beat-light" id="beat-1"></span>
+      <span class="beat-light" id="beat-2"></span>
+      <span class="beat-light" id="beat-3"></span>
+    </div>
+    <div class="metro-row">
+      <label>BPM <span id="metro-bpm-display">120</span></label>
+      <input type="range" id="metro-bpm-slider" min="20" max="240" value="120" />
+    </div>
+    <div class="metro-row">
+      <label>Beats</label>
+      <div class="btn-group">
+        <button class="seg-btn active" data-beats="2">2</button>
+        <button class="seg-btn active" data-beats="3">3</button>
+        <button class="seg-btn active" data-beats="4">4</button>
+      </div>
+    </div>
+    <div class="metro-row">
+      <button id="btn-metro-toggle" class="btn-accent">▶ Start</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Session log panel ── -->
+<div id="session-panel" class="floating-panel hidden">
+  <div class="panel-header">
+    <span>📊 Session Log</span>
+    <button id="btn-session-close" class="panel-close">✕</button>
+  </div>
+  <div class="panel-body">
+    <div id="session-today">
+      <div class="session-stat">
+        <span class="stat-value" id="stat-today-time">0 min</span>
+        <span class="stat-label">Today</span>
+      </div>
+      <div class="session-stat">
+        <span class="stat-value" id="stat-streak">0</span>
+        <span class="stat-label">Day streak 🔥</span>
+      </div>
+      <div class="session-stat">
+        <span class="stat-value" id="stat-total-time">0 min</span>
+        <span class="stat-label">Total</span>
+      </div>
+    </div>
+    <div id="session-history"></div>
+    <button id="btn-clear-session" class="btn-danger-small">Clear history</button>
+  </div>
+</div>
+
+<!-- ── Keyboard shortcuts overlay ── -->
+<div id="shortcuts-overlay" class="overlay hidden">
+  <div class="overlay-box">
+    <div class="overlay-header">
+      <span>⌨ Keyboard Shortcuts</span>
+      <button id="btn-shortcuts-close" class="panel-close">✕</button>
+    </div>
+    <div class="shortcuts-grid">
+      <kbd>Space</kbd><span>Start / Stop lesson</span>
+      <kbd>R</kbd><span>Play reference</span>
+      <kbd>M</kbd><span>Open metronome</span>
+      <kbd>D</kbd><span>Toggle drill mode</span>
+      <kbd>A</kbd><span>Toggle auto-speed BPM</span>
+      <kbd>L</kbd><span>Set / clear loop point</span>
+      <kbd>N</kbd><span>Toggle note labels</span>
+      <kbd>1</kbd><span>Right hand</span>
+      <kbd>2</kbd><span>Left hand</span>
+      <kbd>3</kbd><span>Both hands</span>
+      <kbd>+</kbd><span>BPM +5</span>
+      <kbd>−</kbd><span>BPM −5</span>
+      <kbd>?</kbd><span>This help</span>
+      <kbd>Esc</kbd><span>Close panels</span>
+    </div>
+  </div>
 </div>
 
 <!-- ── Scripts ── -->
+<script src="https://cdn.jsdelivr.net/npm/vexflow@4.2.6/build/cjs/vexflow.js"></script>
 <script src="js/websocket.js"></script>
 <script src="js/keyboard.js"></script>
 <script src="js/lesson.js"></script>
+<script src="js/staff.js"></script>
+<script src="js/metronome.js"></script>
+<script src="js/session.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
