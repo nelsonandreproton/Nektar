@@ -1,8 +1,11 @@
 """MIDI input handler using mido + python-rtmidi."""
+import logging
 import mido
 import threading
 import time
 from typing import Callable, List, Optional
+
+log = logging.getLogger(__name__)
 
 
 class MidiHandler:
@@ -10,6 +13,7 @@ class MidiHandler:
         self._thread: Optional[threading.Thread] = None
         self._running: bool = False
         self._callback: Optional[Callable] = None
+        self._disconnect_cb: Optional[Callable] = None
         self._connected_device: Optional[str] = None
 
     def get_input_devices(self) -> List[str]:
@@ -18,11 +22,17 @@ class MidiHandler:
         except Exception:
             return []
 
-    def connect(self, device_name: str, callback: Callable) -> bool:
-        """Connect to a MIDI input device. Returns True on success."""
+    def connect(self, device_name: str, callback: Callable,
+                disconnect_cb: Optional[Callable] = None) -> bool:
+        """Connect to a MIDI input device. Returns True on success.
+
+        disconnect_cb, if provided, is called (with no arguments) when the
+        device disconnects unexpectedly.
+        """
         self.disconnect()
         try:
             self._callback = callback
+            self._disconnect_cb = disconnect_cb
             self._running = True
             self._connected_device = device_name
             self._thread = threading.Thread(
@@ -52,9 +62,15 @@ class MidiHandler:
                         if self._callback and not msg.is_meta:
                             self._callback(msg)
                     time.sleep(0.001)
-        except Exception:
+        except Exception as exc:
+            log.warning("MIDI device '%s' disconnected: %s", device_name, exc)
             self._running = False
             self._connected_device = None
+            if self._disconnect_cb:
+                try:
+                    self._disconnect_cb()
+                except Exception:
+                    pass
 
     @property
     def connected_device(self) -> Optional[str]:

@@ -1,6 +1,9 @@
 """Lesson state machine: tracks expected notes, scores input, manages progression."""
+import logging
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Callable
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -137,7 +140,8 @@ class LessonEngine:
 
     def set_hand(self, hand: str):
         if hand not in ("right", "left", "both"):
-            raise ValueError(f"Invalid hand: {hand!r}")
+            log.warning("set_hand called with invalid value %r — ignored", hand)
+            return
         self._hand = hand
         if self._lesson:
             self._build_steps()
