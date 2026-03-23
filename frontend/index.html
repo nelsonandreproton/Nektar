@@ -36,6 +36,7 @@
   <!-- Sidebar: lesson list -->
   <aside id="sidebar">
     <div id="category-tabs">
+      <button class="cat-btn" data-cat="course" id="btn-course-tab">Curso</button>
       <button class="cat-btn active" data-cat="all">All</button>
       <button class="cat-btn" data-cat="scales">Scales</button>
       <button class="cat-btn" data-cat="exercises">Exercises</button>
@@ -43,7 +44,16 @@
       <button class="cat-btn" data-cat="songs">Songs</button>
       <button class="cat-btn" data-cat="trainer">Trainer</button>
     </div>
+    <!-- Free-practice lesson list (hidden when Course tab active) -->
     <div id="lesson-list"></div>
+    <!-- Course panel -->
+    <div id="course-panel" class="hidden">
+      <div id="course-stats"></div>
+      <div id="course-list"></div>
+      <div id="course-reset-row">
+        <button id="btn-reset-course" class="btn-danger-small" title="Apagar todo o progresso do curso">↺ Reiniciar Curso</button>
+      </div>
+    </div>
   </aside>
 
   <!-- Main area: lesson view -->
@@ -141,6 +151,9 @@
         </div>
       </div>
     </div>
+
+    <!-- Course attempt feedback banner -->
+    <div id="course-feedback" class="course-feedback hidden"></div>
 
     <!-- Result flash overlay -->
     <div id="result-flash" class="hidden"></div>
@@ -242,6 +255,7 @@
 <script src="js/websocket.js"></script>
 <script src="js/keyboard.js"></script>
 <script src="js/lesson.js"></script>
+<script src="js/course.js"></script>
 <script src="js/staff.js"></script>
 <script src="js/metronome.js"></script>
 <script src="js/session.js"></script>

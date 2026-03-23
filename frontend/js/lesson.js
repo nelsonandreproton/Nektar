@@ -298,6 +298,7 @@ const LessonUI = (() => {
   }
 
   function getActiveLessonId() { return activeLessonId; }
+  function getAllLessons()     { return allLessons; }
 
   return {
     renderList,
@@ -310,6 +311,7 @@ const LessonUI = (() => {
     markChipPressed,
     flashResult,
     getActiveLessonId,
+    getAllLessons,
     markLessonComplete,
   };
 })();

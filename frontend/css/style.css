@@ -937,5 +937,180 @@ kbd {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
+/* ── Course panel ─────────────────────────────────────────────────────────── */
+#course-panel {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1;
+}
+
+#course-stats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.course-progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--surface2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.course-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.4s;
+}
+
+#course-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+}
+
+.course-stage {
+  margin-bottom: 4px;
+}
+
+.course-stage-heading {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 10px 10px 4px;
+}
+
+.course-step {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  margin: 1px 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 12px;
+}
+
+.course-step:hover:not(.locked) {
+  background: var(--surface2);
+}
+
+.course-step.current {
+  background: rgba(123, 109, 255, 0.15);
+  border-left: 2px solid var(--accent);
+  padding-left: 8px;
+}
+
+.course-step.mastered {
+  opacity: 0.7;
+}
+
+.course-step.locked {
+  opacity: 0.38;
+  cursor: default;
+}
+
+.course-step.playing {
+  background: rgba(67, 233, 123, 0.12);
+}
+
+.step-icon {
+  font-size: 11px;
+  width: 14px;
+  flex-shrink: 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.course-step.mastered .step-icon { color: var(--green); }
+.course-step.current  .step-icon { color: var(--accent); }
+
+.step-label {
+  flex: 1;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.course-step.locked .step-label { color: var(--muted); }
+
+.step-hand {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  background: var(--surface2);
+  border-radius: 3px;
+  padding: 1px 4px;
+  flex-shrink: 0;
+}
+
+.step-dots {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.step-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.step-dot.filled {
+  background: var(--accent);
+}
+
+.course-step.mastered .step-dot.filled {
+  background: var(--green);
+}
+
+.step-acc {
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+  min-width: 30px;
+  text-align: right;
+}
+
+#course-reset-row {
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Course feedback banner ───────────────────────────────────────────────── */
+.course-feedback {
+  padding: 10px 14px;
+  font-size: 13px;
+  border-radius: 6px;
+  margin: 6px 0;
+  text-align: center;
+}
+
+.course-feedback.pass {
+  background: rgba(67, 233, 123, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(67, 233, 123, 0.3);
+}
+
+.course-feedback.fail {
+  background: rgba(255, 77, 109, 0.12);
+  color: var(--red);
+  border: 1px solid rgba(255, 77, 109, 0.25);
+}
+
 /* ── Utility ──────────────────────────────────────────────────────────────── */
 .hidden { display: none !important; }

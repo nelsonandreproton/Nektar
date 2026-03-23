@@ -877,6 +877,48 @@ LESSONS: List[dict] = [
         "hand": "right",
         "notes": _interval_exercise([60, 62, 64, 65, 67, 69, 71, 55, 57, 59], 7),
     },
+
+    # ── DIAGNOSTIC ───────────────────────────────────────────────────────────
+    # 16 steps graded from easy single notes → black keys → intervals → triads.
+    # The course engine maps the completion accuracy to a starting stage.
+    {
+        "id": "diagnostic/assessment",
+        "title": "Diagnostic Assessment",
+        "category": "diagnostic",
+        "difficulty": 1,
+        "description": (
+            "Touch each highlighted key. This one-time assessment evaluates your "
+            "current level so the course can place you at the right starting point."
+        ),
+        "default_bpm": 999,   # wait mode — no tempo pressure
+        "hand": "right",
+        "notes": [
+            # 1-5: basic C-position white keys
+            {"note": 60, "beat":  0.0, "duration": 1.0, "hand": "right", "velocity": 80},  # C4
+            {"note": 62, "beat":  1.0, "duration": 1.0, "hand": "right", "velocity": 80},  # D4
+            {"note": 64, "beat":  2.0, "duration": 1.0, "hand": "right", "velocity": 80},  # E4
+            {"note": 65, "beat":  3.0, "duration": 1.0, "hand": "right", "velocity": 80},  # F4
+            {"note": 67, "beat":  4.0, "duration": 1.0, "hand": "right", "velocity": 80},  # G4
+            # 6-7: wider range
+            {"note": 72, "beat":  5.0, "duration": 1.0, "hand": "right", "velocity": 80},  # C5
+            {"note": 55, "beat":  6.0, "duration": 1.0, "hand": "right", "velocity": 80},  # G3
+            # 8-9: black keys
+            {"note": 66, "beat":  7.0, "duration": 1.0, "hand": "right", "velocity": 80},  # F#4
+            {"note": 70, "beat":  8.0, "duration": 1.0, "hand": "right", "velocity": 80},  # Bb4
+            # 10-11: two-note intervals
+            {"note": 60, "beat":  9.0, "duration": 1.0, "hand": "right", "velocity": 80},  # C4 + E4
+            {"note": 64, "beat":  9.0, "duration": 1.0, "hand": "right", "velocity": 80},
+            {"note": 67, "beat": 10.0, "duration": 1.0, "hand": "right", "velocity": 80},  # G4 + B4
+            {"note": 71, "beat": 10.0, "duration": 1.0, "hand": "right", "velocity": 80},
+            # 12-13: triads
+            {"note": 60, "beat": 11.0, "duration": 1.0, "hand": "right", "velocity": 80},  # C major
+            {"note": 64, "beat": 11.0, "duration": 1.0, "hand": "right", "velocity": 80},
+            {"note": 67, "beat": 11.0, "duration": 1.0, "hand": "right", "velocity": 80},
+            {"note": 67, "beat": 12.0, "duration": 1.0, "hand": "right", "velocity": 80},  # G major
+            {"note": 71, "beat": 12.0, "duration": 1.0, "hand": "right", "velocity": 80},
+            {"note": 74, "beat": 12.0, "duration": 1.0, "hand": "right", "velocity": 80},
+        ],
+    },
 ]
 
 _LESSON_MAP: Dict[str, dict] = {l["id"]: l for l in LESSONS}
