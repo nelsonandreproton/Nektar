@@ -143,9 +143,10 @@ class PianoServer:
         lesson_id = lesson.get("id", "")
         hand      = state.get("hand", "right")
         bpm       = float(state.get("bpm", 60))
-        total     = score.get("total", 0)
-        correct   = score.get("correct", 0)
-        accuracy  = round((correct / total * 100) if total > 0 else 0, 1)
+        correct      = score.get("correct", 0)
+        wrong_steps  = score.get("wrong_steps", 0)
+        steps_attempted = correct + wrong_steps
+        accuracy  = round((correct / steps_attempted * 100) if steps_attempted > 0 else 0, 1)
 
         if not lesson_id:
             return

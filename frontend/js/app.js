@@ -38,8 +38,15 @@ document.addEventListener("DOMContentLoaded", () => {
       const opt = document.createElement("option");
       opt.value = name;
       opt.textContent = name;
-      if (name.toLowerCase().includes("nektar")) opt.selected = true;
       sel.appendChild(opt);
+    }
+    // Auto-select: single device, or first non-virtual device
+    if (inputs.length === 1) {
+      sel.options[1].selected = true;
+    } else if (inputs.length > 1) {
+      const preferred = inputs.find(n => !n.toLowerCase().includes("midiin2") && !n.toLowerCase().includes("virtual") && !n.toLowerCase().includes("microsoft"));
+      const idx = preferred ? inputs.indexOf(preferred) + 1 : 1;
+      sel.options[idx].selected = true;
     }
     if (sel.value) connectDevice(sel.value);
   });
@@ -324,7 +331,8 @@ document.addEventListener("DOMContentLoaded", () => {
     LessonUI.updateNextNotes([]);
     StaffView.update([]);
 
-    const pct   = score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0;
+    const stepsAttempted = score.correct + (score.wrong_steps || 0);
+    const pct   = stepsAttempted > 0 ? Math.round((score.correct / stepsAttempted) * 100) : 0;
     const emoji = pct === 100 ? "🎉" : pct >= 80 ? "🎹" : "👍";
     document.getElementById("hint-label").textContent =
       `${emoji} Completo! Precisão: ${pct}%  (${score.correct}/${score.total} correctas)`;
@@ -551,6 +559,10 @@ document.addEventListener("DOMContentLoaded", () => {
     metroPanel.classList.add("hidden");
     Metronome.stop();
   });
+
+  // ── Initialise button visibility (non-course mode is the default) ──────────
+
+  _setCourseButtonsVisible(false);
 
   // ── Note labels toggle ─────────────────────────────────────────────────────
 

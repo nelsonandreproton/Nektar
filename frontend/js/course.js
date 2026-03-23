@@ -87,20 +87,20 @@ const CourseUI = (() => {
 
     let msg = "";
     if (is_diagnostic) {
-      msg = `Diagnóstico completo! Precisão: ${accuracy}%. O teu caminho foi ajustado.`;
+      msg = `Diagnostic complete! Accuracy: ${accuracy}%. Your course path has been set.`;
     } else if (newly_mastered) {
-      msg = `🏆 Dominaste esta lição! Próxima desbloqueada.`;
+      msg = `🏆 Lesson mastered! Next one unlocked.`;
     } else if (passed) {
       const remain = needed - consecutive;
-      msg = `✓ ${accuracy}% — ${consecutive}/${needed} passes consecutivos. Mais ${remain} para avançar.`;
+      msg = `✓ ${accuracy}% — ${consecutive}/${needed} consecutive passes. ${remain} more to advance.`;
     } else if (!accuracy_ok && !bpm_ok) {
       const threshold = _state ? _state.mastery_accuracy : 90;
-      msg = `${accuracy}% (precisas ≥${threshold}%) e BPM ${Math.round(bpm)} (precisas ≥${min_bpm}). Continua!`;
+      msg = `${accuracy}% (need ≥${threshold}%) and BPM ${Math.round(bpm)} (need ≥${min_bpm}). Keep going!`;
     } else if (!accuracy_ok) {
       const threshold = _state ? _state.mastery_accuracy : 90;
-      msg = `${accuracy}% — precisas de ≥${threshold}% para contar como pass. Continua!`;
+      msg = `${accuracy}% — need ≥${threshold}% to count as a pass. Keep going!`;
     } else if (!bpm_ok) {
-      msg = `Boa precisão (${accuracy}%), mas o andamento (${Math.round(bpm)} BPM) está abaixo do mínimo (${min_bpm} BPM). Aumenta o BPM!`;
+      msg = `Good accuracy (${accuracy}%), but tempo (${Math.round(bpm)} BPM) is below the minimum (${min_bpm} BPM). Speed it up!`;
     }
 
     banner.textContent = msg;

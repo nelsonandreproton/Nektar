@@ -26,7 +26,7 @@ class LessonEngine:
         self._hand: str = "right"
         self._mode: str = "wait"  # wait | drill | metronome
         self._bpm: float = 60.0
-        self._score: dict = {"correct": 0, "wrong": 0, "missed": 0, "total": 0}
+        self._score: dict = {"correct": 0, "wrong": 0, "wrong_steps": 0, "missed": 0, "total": 0}
         self._note_wrong_counts: Dict[int, int] = {}  # midi → wrong press count
 
         # Auto-speed (adaptive BPM)
@@ -132,7 +132,7 @@ class LessonEngine:
         self._wrong_notes = set()
         self._note_wrong_counts = {}
         self._auto_speed_streak = 0
-        self._score = {"correct": 0, "wrong": 0, "missed": 0, "total": len(self._steps)}
+        self._score = {"correct": 0, "wrong": 0, "wrong_steps": 0, "missed": 0, "total": len(self._steps)}
         self._status = "playing"
 
     def stop(self):
@@ -223,6 +223,9 @@ class LessonEngine:
                 self._bpm = new_bpm
 
     def _advance_step(self):
+        # Count this step as failed if any wrong notes were pressed during it
+        if self._wrong_notes:
+            self._score["wrong_steps"] += 1
         self._current_step += 1
         self._pressed_this_step = set()
         self._wrong_notes = set()

@@ -923,6 +923,259 @@ LESSONS: List[dict] = [
 
 _LESSON_MAP: Dict[str, dict] = {l["id"]: l for l in LESSONS}
 
+# ── Per-lesson teaching instructions ──────────────────────────────────────────
+# Shown in the lesson detail panel before starting.
+# Keys match lesson "id" values above.
+
+LESSON_INSTRUCTIONS: Dict[str, List[str]] = {
+
+    # ── Diagnostic ────────────────────────────────────────────────────────────
+    "diagnostic/assessment": [
+        "Touch each highlighted key as it lights up — there is no time limit.",
+        "The test gets progressively harder: single white keys → black keys → two-note intervals → chords.",
+        "Mistakes are fine; this assessment places you at the right starting point in the course.",
+    ],
+
+    # ── Scales ────────────────────────────────────────────────────────────────
+    "scales/c_major_rh": [
+        "C major uses only white keys: C-D-E-F-G-A-B-C.",
+        "Fingering going up: 1-2-3, tuck thumb under → 1-2-3-4-5. Reverse coming down.",
+        "The thumb tuck after finger 3 is the key skill — practise just that crossing slowly.",
+        "Keep the wrist level; don't lift the elbow when the thumb crosses under.",
+    ],
+    "scales/c_major_lh": [
+        "Left hand C major: C-D-E-F-G-A-B-C (same notes, different fingering).",
+        "Going up: 5-4-3-2-1, then cross finger 3 over the thumb → 3-2-1.",
+        "The finger-3-over-thumb cross is the challenge — practise it in isolation first.",
+        "Once each hand feels comfortable alone, try hands together at a slow BPM.",
+    ],
+    "scales/c_major_both": [
+        "Both hands play the C major scale simultaneously, one octave apart.",
+        "Right hand fingering: 1-2-3-1-2-3-4-5. Left hand: 5-4-3-2-1-3-2-1.",
+        "The thumb crossings happen at different moments for each hand — that is the main challenge.",
+        "Start at half your target BPM; coordinate the hands before adding speed.",
+    ],
+    "scales/g_major_rh": [
+        "G major has one sharp: F#. Notes: G-A-B-C-D-E-F#-G.",
+        "Fingering is the same as C major: 1-2-3-1-2-3-4-5.",
+        "Pay attention to F# (black key) near the top — keep the wrist level when reaching it.",
+    ],
+    "scales/f_major_rh": [
+        "F major has one flat: Bb. Notes: F-G-A-Bb-C-D-E-F.",
+        "Fingering differs from C major: 1-2-3-4-1-2-3-4 (the thumb lands on Bb).",
+        "Placing the thumb on a black key (Bb) is the technical challenge here — practise that transition.",
+    ],
+    "scales/d_major_rh": [
+        "D major has two sharps: F# and C#. Notes: D-E-F#-G-A-B-C#-D.",
+        "Fingering: 1-2-3-1-2-3-4-5 (same as C major).",
+        "Two black keys require careful thumb positioning — slow practice first.",
+    ],
+    "scales/a_major_rh": [
+        "A major has three sharps: F#, C#, G#. Notes: A-B-C#-D-E-F#-G#-A.",
+        "Fingering: 1-2-3-1-2-3-4-5.",
+        "G# near the top requires the thumb to be in place early — plan the crossing ahead of time.",
+    ],
+    "scales/e_major_rh": [
+        "E major has four sharps: F#, C#, G#, D#. Notes: E-F#-G#-A-B-C#-D#-E.",
+        "Fingering: 1-2-3-1-2-3-4-5.",
+        "Most notes are black keys — keep the hand slightly elevated to reach them comfortably.",
+    ],
+    "scales/a_minor_rh": [
+        "A natural minor: A-B-C-D-E-F-G-A (same notes as C major, different starting point).",
+        "Fingering: 1-2-3-1-2-3-4-5 (same as C major).",
+        "Listen for the darker, more melancholic character compared to major scales.",
+    ],
+    "scales/chromatic_rh": [
+        "The chromatic scale uses every semitone: C-C#-D-D#-E-F-F#-G-G#-A-A#-B-C.",
+        "Fingering alternates thumb and middle finger (1-3) on black-white pairs; use 1-2 for E-F and B-C.",
+        "Absolute evenness is the goal — every note must be identical in weight and timing.",
+        "Essential for technique, keyboard geography, and ear training.",
+    ],
+
+    # ── Exercises ─────────────────────────────────────────────────────────────
+    "exercises/five_finger_c": [
+        "Place your right hand: thumb (1) on C4, index (2) D4, middle (3) E4, ring (4) F4, pinky (5) G4.",
+        "Keep fingers curved as if loosely holding a ball; wrist relaxed and level.",
+        "Press each key fully, hold briefly, then lift cleanly before moving to the next.",
+        "This position is the foundation for most beginner pieces.",
+    ],
+    "exercises/five_finger_lh": [
+        "Left hand mirror of the C exercise: pinky (5) on C3, ring (4) D3, middle (3) E3, index (2) F3, thumb (1) G3.",
+        "Curved fingers and a relaxed wrist — same principles as the right hand.",
+        "The left hand often feels awkward at first; slow, deliberate repetition builds the habit.",
+    ],
+    "exercises/five_finger_g": [
+        "Right hand five-finger position on G: thumb (1) on G4, then A4, B4, C5, D5.",
+        "B and C are adjacent white keys with no black key between them — notice how close the fingers are.",
+        "Same technique as the C exercise; builds fluency in the G position used by many songs.",
+    ],
+    "exercises/five_finger_f": [
+        "Right hand five-finger position on F: thumb (1) on F4, then G4, A4, Bb4, C5.",
+        "Bb is a black key — index finger (2) must reach slightly further back.",
+        "Builds the hand shape needed for F major and related pieces.",
+    ],
+    "exercises/contrary_motion_c": [
+        "Both hands start on C and move in opposite directions at the same time.",
+        "Right hand goes up (ascending C major), left hand goes down (descending) simultaneously.",
+        "Mirror symmetry means both thumbs always move at the same moment — use that to stay in sync.",
+        "Start very slowly; this is a coordination exercise, not a speed exercise.",
+    ],
+    "exercises/hanon_1": [
+        "Hanon No. 1 is a classic finger-independence exercise — each finger gets equal work.",
+        "Keep fingers close to the keys and initiate movement from the knuckle, not the whole arm.",
+        "Start slowly (≤60 BPM) until every note sounds equal in volume and timing.",
+        "Only increase BPM when the slow version feels effortless — speed follows control.",
+    ],
+    "exercises/alberti_bass": [
+        "The Alberti bass is a common left-hand accompaniment: low note → top note → middle → top (repeat).",
+        "In C: C-G-E-G with fingers 5-1-2-1.",
+        "Keep the wrist very still — movement comes from the fingers only.",
+        "Aim for a light, even sound — this is background texture, not the melody.",
+    ],
+    "exercises/intervals_thirds": [
+        "A third spans three letter names (C-E, D-F, E-G, etc.).",
+        "Play each pair simultaneously using fingers 1&3, 2&4, or 3&5 as needed.",
+        "Listen for the warm, blended sound — both notes should be equally loud.",
+        "Thirds are the building blocks of chords and harmonic writing.",
+    ],
+    "exercises/intervals_fifths": [
+        "A fifth spans five letter names (C-G, D-A, E-B, etc.) — a wider stretch than a third.",
+        "Use fingers 1&5 for most fifths; keep the hand relaxed and the wrist slightly raised.",
+        "Fifths create a powerful, open sound — listen for the hollow resonance.",
+    ],
+    "exercises/intervals_octaves": [
+        "An octave is the same note name eight steps apart (C4 to C5).",
+        "Use fingers 1&5. The hand must stretch; keep the thumb and pinky curved, not flat.",
+        "Avoid tension in the forearm — if it hurts, slow down and relax.",
+        "Octaves appear constantly in advanced repertoire; building this reach now pays off later.",
+    ],
+    "exercises/broken_chord_c": [
+        "An arpeggio plays the notes of a chord one at a time in a flowing pattern.",
+        "C major arpeggio: C-E-G-C. Right-hand fingering: 1-2-3-5 (or 1-2-3-1 with thumb tuck for longer spans).",
+        "Aim for connected, smooth notes with no bump — especially across any thumb crossing.",
+        "Arpeggios build hand flexibility, thumb technique, and knowledge of chord shapes simultaneously.",
+    ],
+
+    # ── Chords ────────────────────────────────────────────────────────────────
+    "chords/basic_triads": [
+        "A triad is three notes played simultaneously: root, third, and fifth.",
+        "C major triad: C-E-G. Use fingers 1-3-5 of the right hand.",
+        "Press all three keys at exactly the same moment — practise the hand shape away from the keys first.",
+        "Listen for a balanced, blended sound — no single note should stand out.",
+    ],
+    "chords/i_iv_v_i": [
+        "The I-IV-V-I progression is the most common chord sequence in Western music.",
+        "In C major: C major (I) → F major (IV) → G major (V) → C major (I).",
+        "Focus on smooth hand movement between chords — no gap in sound between changes.",
+        "Keep common notes (notes shared by adjacent chords) in the same finger where possible.",
+    ],
+    "chords/am_progression": [
+        "Am-F-C-G is one of the most-used progressions in modern pop and rock.",
+        "Practise each chord shape individually until it feels natural, then link them.",
+        "The smoothest change: find the note each chord shares with the next and keep that finger in place.",
+        "Try humming or singing a melody over the top once the chords feel automatic.",
+    ],
+
+    # ── Songs ─────────────────────────────────────────────────────────────────
+    "songs/hot_cross_buns": [
+        "Uses only three notes: E (finger 3), D (finger 2), C (finger 1) — no thumb tuck needed.",
+        "Focus on equal volume for every note and a relaxed, level wrist.",
+        "Try to keep the rhythm steady — use the metronome if needed.",
+        "A perfect first song: simple enough to get right quickly, which builds confidence.",
+    ],
+    "songs/au_clair_de_la_lune": [
+        "A classic French melody built from only four different notes.",
+        "Pay attention to the rhythm — some notes are held longer than others.",
+        "Let the melody breathe: follow the natural rise and fall of the phrases.",
+    ],
+    "songs/frere_jacques": [
+        "A French round with a clear four-phrase structure that repeats.",
+        "Focus on clean endings to each phrase — lift the finger deliberately.",
+        "Once you know the melody hands-alone, the piece rewards expressive dynamics.",
+    ],
+    "songs/lightly_row": [
+        "A light, flowing melody — notice where phrases begin and end and honour them.",
+        "The second half mirrors much of the first, so once the opening is learned, the rest follows quickly.",
+        "Aim for smooth, connected notes (legato) throughout.",
+    ],
+    "songs/go_tell_aunt_rhody": [
+        "A simple American folk tune — use it to practise consistent tone and clean finger movement.",
+        "Play with a slightly singing quality: not mechanical, but expressive.",
+    ],
+    "songs/mary_had_a_little_lamb": [
+        "Notes: E-D-C-D-E-E-E — fingers 3-2-1-2-3-3-3.",
+        "The repeated-note sections need clearly separate key presses — don't let the notes blur.",
+        "Aim for smooth, even transitions and a steady tempo throughout.",
+    ],
+    "songs/twinkle_twinkle": [
+        "A 4/4 melody — count steadily and resist rushing the repeated notes.",
+        "The chorus ('Twinkle twinkle little star') returns exactly as the opening — once memorised, it's automatic.",
+        "Try adding gentle dynamic shaping: slightly louder on the high notes.",
+    ],
+    "songs/happy_birthday": [
+        "Starts on an upbeat (the 'Hap-' before the bar line) — count one bar in before you begin playing.",
+        "The melody spans more than one hand position; watch for the moment to shift.",
+        "A 3/4 time signature — feel the waltz lilt: ONE-two-three, ONE-two-three.",
+    ],
+    "songs/jingle_bells": [
+        "A bright, upbeat 4/4 melody — keep the pulse steady and the tone crisp.",
+        "The chorus ('Jingle bells, jingle bells…') repeats exactly — once you know it, you know half the piece.",
+        "Watch for the pick-up note at the start of each section.",
+    ],
+    "songs/ode_to_joy": [
+        "Beethoven's famous theme from Symphony No. 9.",
+        "The melody mostly stays in one hand position — notice the consistent rhythmic pattern.",
+        "Play with a firm, confident tone to match the triumphant character.",
+        "Focus on keeping every note the same length — the grandeur comes from evenness.",
+    ],
+    "songs/ode_to_joy_rh": [
+        "Beethoven's famous theme from Symphony No. 9.",
+        "The melody mostly stays in one hand position — notice the consistent rhythmic pattern.",
+        "Play with a firm, confident tone to match the triumphant character.",
+        "Focus on keeping every note the same length — the grandeur comes from evenness.",
+    ],
+    "songs/ode_to_joy_both": [
+        "The full version with both hands — left hand provides the harmonic accompaniment.",
+        "Learn each hand separately first, then combine at a slow BPM.",
+        "The left hand should be quieter than the right so the melody sings through.",
+    ],
+    "songs/fur_elise": [
+        "One of Beethoven's most recognised pieces — often a student's first 'real' classical work.",
+        "Opening motif: E-D#-E-D#-E-B-D-C-A. Learn it hands-alone before combining.",
+        "The left-hand pattern (Am arpeggio) is completely independent of the right — coordinate slowly.",
+        "Aim for a singing, expressive right-hand tone; avoid playing it stiffly or mechanically.",
+    ],
+    "songs/bach_prelude_c": [
+        "The C major Prelude from Bach's Well-Tempered Clavier — a series of broken-chord arpeggios.",
+        "Once you learn the shape of bar 1, the same pattern repeats through changing harmonies.",
+        "Evenness is everything: all 16th notes must be identical in weight and timing.",
+        "Listen to the underlying harmony shifting beneath the repeating motion — that is the beauty of the piece.",
+    ],
+    "songs/minuet_in_g": [
+        "A Baroque dance piece in 3/4 (one-two-three) — play with a light, elegant touch.",
+        "Feel the dance lilt: a slight emphasis on beat 1, lighter on beats 2 and 3.",
+        "Each phrase has a natural rise and fall — shape it expressively rather than playing every note equally.",
+    ],
+
+    # ── Trainer ───────────────────────────────────────────────────────────────
+    "trainer/find_the_note": [
+        "A note name is shown and you must find it on the keyboard.",
+        "Use this to build fast keyboard geography — knowing where notes live without looking.",
+        "The sharps and flats (black keys) follow a consistent pattern: groups of 2 and groups of 3.",
+        "Tip: C is always the white key just to the left of a group of two black keys.",
+    ],
+    "trainer/keyboard_thirds": [
+        "A note is shown and you must play the third above it (skip one letter name).",
+        "C → E, D → F, E → G, F → A, G → B, A → C, B → D.",
+        "Thirds are the foundation of chords — recognising them instantly is a core skill.",
+    ],
+    "trainer/keyboard_fifths": [
+        "A note is shown and you must play the fifth above it (skip three letter names).",
+        "C → G, D → A, E → B, F → C, G → D, A → E, B → F#.",
+        "Fifths define the harmonic 'root' of a chord — essential for understanding harmony.",
+    ],
+}
+
 
 def get_all_lessons() -> List[dict]:
     return LESSONS
@@ -942,6 +1195,7 @@ def get_lessons_summary() -> List[dict]:
             "difficulty": l["difficulty"],
             "description": l["description"],
             "hand": l.get("hand", "right"),
+            "instructions": LESSON_INSTRUCTIONS.get(l["id"], []),
         }
         for l in LESSONS
     ]

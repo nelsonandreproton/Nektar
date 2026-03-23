@@ -82,12 +82,37 @@ const LessonUI = (() => {
     }
   }
 
+  function _renderInstructions(items) {
+    let panel = document.getElementById("lesson-instructions");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "lesson-instructions";
+      // Insert after lesson-badges
+      const badges = document.getElementById("lesson-badges");
+      if (badges && badges.parentNode) {
+        badges.parentNode.insertBefore(panel, badges.nextSibling);
+      }
+    }
+    if (!items || items.length === 0) {
+      panel.classList.add("hidden");
+      panel.innerHTML = "";
+      return;
+    }
+    panel.classList.remove("hidden");
+    panel.innerHTML =
+      '<span class="instr-heading">📖 How to practise</span><ul>' +
+      items.map(t => `<li>${t}</li>`).join("") +
+      "</ul>";
+  }
+
   function selectLesson(lesson) {
     activeLessonId = lesson.id;
     _filterAndRender();
 
     document.getElementById("lesson-title").textContent = lesson.title;
     document.getElementById("lesson-desc").textContent  = lesson.description;
+
+    _renderInstructions(lesson.instructions || []);
 
     const badges = document.getElementById("lesson-badges");
     badges.innerHTML = "";
@@ -144,8 +169,9 @@ const LessonUI = (() => {
     document.getElementById("score-wrong").textContent   = `✗ ${s.wrong}`;
     document.getElementById("score-step").textContent    = `${step} / ${total}`;
 
-    const pct = total > 0 && step > 0
-      ? Math.round((s.correct / total) * 100) + "%" : "—";
+    const stepsAttempted = s.correct + (s.wrong_steps || 0);
+    const pct = stepsAttempted > 0
+      ? Math.round((s.correct / stepsAttempted) * 100) + "%" : "—";
     document.getElementById("score-pct").textContent = pct;
 
     const fill = total > 0 ? (step / total) * 100 : 0;
