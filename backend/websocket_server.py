@@ -14,6 +14,7 @@ from .audio_player import AudioPlayer
 from .lesson_engine import LessonEngine
 from .lessons_library import get_lesson_by_id, get_lessons_summary
 from .midi_parser import parse_midi_from_bytes
+from .course_engine import CourseEngine
 
 log = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class PianoServer:
         self.midi = MidiHandler()
         self.audio = AudioPlayer()
         self.engine = LessonEngine()
+        self.course = CourseEngine()
         self._loop: asyncio.AbstractEventLoop = None
         self._playback_stop: threading.Event = threading.Event()
         self._playback_thread: threading.Thread = None
@@ -111,9 +113,27 @@ class PianoServer:
     def _sync_on_complete(self, score: dict):
         if self._loop and self._loop.is_running():
             asyncio.run_coroutine_threadsafe(
-                self._broadcast({"type": "lesson_complete", "score": score}),
+                self._on_complete_async(score),
                 self._loop,
             )
+
+    async def _on_complete_async(self, score: dict):
+        await self._broadcast({"type": "lesson_complete", "score": score})
+        # Record attempt in course engine
+        state     = self.engine.get_state()
+        lesson    = state.get("lesson") or {}
+        lesson_id = lesson.get("id", "")
+        hand      = state.get("hand", "right")
+        total     = score.get("total", 0)
+        correct   = score.get("correct", 0)
+        accuracy  = round((correct / total * 100) if total > 0 else 0, 1)
+        if lesson_id:
+            feedback = self.course.record_attempt(lesson_id, hand, accuracy)
+            await self._broadcast({
+                "type":     "course_attempt",
+                "feedback": feedback,
+                "course":   self.course.get_state(),
+            })
 
     # ── Message routing ───────────────────────────────────────────────────────
 
@@ -128,6 +148,9 @@ class PianoServer:
                 "inputs": self.midi.get_input_devices(),
                 "outputs": self.audio.get_output_devices(),
             }))
+
+        elif t == "ping":
+            pass  # keep-alive, no response needed
 
         elif t == "connect_device":
             name = _str(msg, "name")
@@ -144,6 +167,13 @@ class PianoServer:
 
         elif t == "get_lessons":
             await ws.send(json.dumps({"type": "lessons", "lessons": get_lessons_summary()}))
+
+        elif t == "get_course":
+            await ws.send(json.dumps({"type": "course_state", "course": self.course.get_state()}))
+
+        elif t == "reset_course":
+            self.course.reset()
+            await self._broadcast({"type": "course_state", "course": self.course.get_state()})
 
         elif t == "start_lesson":
             lesson_id = _str(msg, "lesson_id", maxlen=_MAX_ID_LEN)

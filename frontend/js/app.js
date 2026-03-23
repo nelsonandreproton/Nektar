@@ -11,12 +11,14 @@ document.addEventListener("DOMContentLoaded", () => {
   let lessonStatus    = "idle";   // idle | playing | completed
   let loopPending     = false;    // waiting to set loop end on next press
   let loopStartStep   = null;
+  let courseMode      = false;    // true when Course tab is active
 
   // ── WebSocket lifecycle ────────────────────────────────────────────────────
 
   window.addEventListener("ws:open", () => {
     WS.send({ type: "get_devices" });
     WS.send({ type: "get_lessons" });
+    WS.send({ type: "get_course" });
   });
 
   window.addEventListener("ws:close", () => {
@@ -74,6 +76,91 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btn-reference").disabled = false;
   });
 
+  // ── Course events ───────────────────────────────────────────────────────────
+
+  CourseUI.init((lessonId, hand) => {
+    // User clicked a course step — select that lesson and set hand
+    const allLessons = LessonUI.getAllLessons();
+    const lesson     = allLessons.find(l => l.id === lessonId);
+    if (lesson) {
+      LessonUI.selectLesson(lesson);
+    }
+    // Set the hand selector to match the curriculum's required hand
+    currentHand = hand;
+    document.querySelectorAll(".seg-btn[data-hand]").forEach(b =>
+      b.classList.toggle("active", b.dataset.hand === hand)
+    );
+    WS.send({ type: "set_hand", hand });
+    document.getElementById("btn-start").disabled     = false;
+    document.getElementById("btn-reference").disabled = false;
+  });
+
+  window.addEventListener("ws:course_state", (e) => {
+    CourseUI.render(e.detail.course);
+    _syncCourseWelcome(e.detail.course);
+  });
+
+  window.addEventListener("ws:course_attempt", (e) => {
+    CourseUI.showAttemptFeedback(e.detail.feedback);
+    CourseUI.render(e.detail.course);
+    // If newly mastered, auto-select next lesson in course mode
+    if (courseMode && e.detail.feedback.newly_mastered) {
+      const nextStep = e.detail.course.curriculum[e.detail.course.current_index];
+      if (nextStep) {
+        setTimeout(() => _selectCourseStep(nextStep, e.detail.course), 800);
+      }
+    }
+  });
+
+  function _selectCourseStep(step, courseState) {
+    const allLessons = LessonUI.getAllLessons();
+    const lesson = allLessons.find(l => l.id === step.lesson_id);
+    if (lesson) LessonUI.selectLesson(lesson);
+    currentHand = step.hand;
+    document.querySelectorAll(".seg-btn[data-hand]").forEach(b =>
+      b.classList.toggle("active", b.dataset.hand === step.hand)
+    );
+    WS.send({ type: "set_hand", hand: step.hand });
+    document.getElementById("btn-start").disabled     = false;
+    document.getElementById("btn-reference").disabled = false;
+  }
+
+  function _syncCourseWelcome(courseState) {
+    if (!courseState) return;
+    if (!courseState.diagnostic_complete && courseMode) {
+      // Auto-select the diagnostic lesson
+      const diagStep = courseState.curriculum[0];
+      if (diagStep) _selectCourseStep(diagStep, courseState);
+    }
+  }
+
+  // Course tab toggle
+  document.getElementById("btn-course-tab").addEventListener("click", () => {
+    courseMode = true;
+    document.getElementById("lesson-list").classList.add("hidden");
+    document.getElementById("course-panel").classList.remove("hidden");
+    document.querySelectorAll(".cat-btn").forEach(b =>
+      b.classList.toggle("active", b === document.getElementById("btn-course-tab"))
+    );
+    WS.send({ type: "get_course" });
+  });
+
+  // When any non-course category tab is clicked, hide course panel
+  document.querySelectorAll(".cat-btn:not(#btn-course-tab)").forEach(btn => {
+    btn.addEventListener("click", () => {
+      courseMode = false;
+      document.getElementById("lesson-list").classList.remove("hidden");
+      document.getElementById("course-panel").classList.add("hidden");
+    });
+  });
+
+  // Reset course button
+  document.getElementById("btn-reset-course").addEventListener("click", () => {
+    if (confirm("Tens a certeza que queres apagar todo o progresso do curso?")) {
+      WS.send({ type: "reset_course" });
+    }
+  });
+
   // ── MIDI input events ──────────────────────────────────────────────────────
 
   window.addEventListener("ws:note_on", (e) => {
@@ -126,7 +213,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const pct   = score.total > 0 ? Math.round((score.correct / score.total) * 100) : 0;
     const emoji = pct === 100 ? "🎉" : pct >= 80 ? "🎹" : "👍";
     document.getElementById("hint-label").textContent =
-      `${emoji} Complete! Accuracy: ${pct}%  (${score.correct}/${score.total} correct)`;
+      `${emoji} Completo! Precisão: ${pct}%  (${score.correct}/${score.total} correctas)`;
 
     document.getElementById("btn-stop").disabled  = true;
     document.getElementById("btn-start").disabled = false;
@@ -213,7 +300,9 @@ document.addEventListener("DOMContentLoaded", () => {
     LessonUI.resetScore();
     loopPending   = false;
     loopStartStep = null;
+    document.getElementById("course-feedback").classList.add("hidden");
     WS.send({ type: "start_lesson", lesson_id: id, hand: currentHand });
+    CourseUI.setActiveLessonId(id, currentHand);
     Session.startTimer();
     Session.recordLessonPlayed(id);
   });
