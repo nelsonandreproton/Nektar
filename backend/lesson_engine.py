@@ -190,9 +190,12 @@ class LessonEngine:
         if note in expected:
             self._pressed_this_step.add(note)
             if expected.issubset(self._pressed_this_step):
-                self._score["correct"] += 1
-                self._auto_speed_streak += 1
-                self._check_auto_speed()
+                if not self._wrong_notes:
+                    self._score["correct"] += 1
+                    self._auto_speed_streak += 1
+                    self._check_auto_speed()
+                else:
+                    self._auto_speed_streak = 0
                 self._advance_step()
             return "correct"
         else:

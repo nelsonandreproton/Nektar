@@ -7,7 +7,7 @@ import threading
 from typing import Set
 
 import websockets
-from websockets.server import WebSocketServerProtocol
+from websockets.asyncio.server import ServerConnection as WebSocketServerProtocol
 
 from .midi_handler import MidiHandler
 from .audio_player import AudioPlayer
@@ -72,7 +72,7 @@ class PianoServer:
 
     async def handler(self, websocket: WebSocketServerProtocol):
         # CSRF: reject connections from unexpected origins
-        origin = websocket.request_headers.get("Origin", "")
+        origin = websocket.request.headers.get("Origin", "")
         if origin and origin not in self._ALLOWED_ORIGINS:
             log.warning("Rejected WebSocket from unexpected origin: %s", origin)
             await websocket.close(1008, "Origin not allowed")

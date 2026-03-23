@@ -145,7 +145,7 @@ const LessonUI = (() => {
     document.getElementById("score-step").textContent    = `${step} / ${total}`;
 
     const pct = total > 0 && step > 0
-      ? Math.round((s.correct / step) * 100) + "%" : "—";
+      ? Math.round((s.correct / total) * 100) + "%" : "—";
     document.getElementById("score-pct").textContent = pct;
 
     const fill = total > 0 ? (step / total) * 100 : 0;
