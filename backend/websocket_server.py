@@ -13,8 +13,9 @@ from .midi_handler import MidiHandler
 from .audio_player import AudioPlayer
 from .lesson_engine import LessonEngine
 from .lessons_library import get_lesson_by_id, get_lessons_summary
-from .midi_parser import parse_midi_from_bytes
+from .midi_parser import parse_midi_from_bytes, MAX_FILE_BYTES as _MAX_MIDI_BYTES
 from .course_engine import CourseEngine
+from .coach import get_tips
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class PianoServer:
         self._loop: asyncio.AbstractEventLoop = None
         self._playback_stop: threading.Event = threading.Event()
         self._playback_thread: threading.Thread = None
+        self._is_assessing: bool = False   # True when lesson started in assess mode
 
         self.engine.set_callbacks(
             on_step_changed=self._sync_broadcast_state,
@@ -62,7 +64,20 @@ class PianoServer:
 
     # ── WebSocket lifecycle ───────────────────────────────────────────────────
 
+    # Allowed origins for CSRF protection (localhost only)
+    _ALLOWED_ORIGINS = frozenset({
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+    })
+
     async def handler(self, websocket: WebSocketServerProtocol):
+        # CSRF: reject connections from unexpected origins
+        origin = websocket.request_headers.get("Origin", "")
+        if origin and origin not in self._ALLOWED_ORIGINS:
+            log.warning("Rejected WebSocket from unexpected origin: %s", origin)
+            await websocket.close(1008, "Origin not allowed")
+            return
+
         if len(self.clients) >= _MAX_CLIENTS:
             await websocket.close(1013, "Server full")
             return
@@ -119,21 +134,49 @@ class PianoServer:
 
     async def _on_complete_async(self, score: dict):
         await self._broadcast({"type": "lesson_complete", "score": score})
-        # Record attempt in course engine
+
+        if not self._is_assessing:
+            return  # practice mode — don't record toward mastery
+
         state     = self.engine.get_state()
         lesson    = state.get("lesson") or {}
         lesson_id = lesson.get("id", "")
         hand      = state.get("hand", "right")
+        bpm       = float(state.get("bpm", 60))
         total     = score.get("total", 0)
         correct   = score.get("correct", 0)
         accuracy  = round((correct / total * 100) if total > 0 else 0, 1)
-        if lesson_id:
-            feedback = self.course.record_attempt(lesson_id, hand, accuracy)
-            await self._broadcast({
-                "type":     "course_attempt",
-                "feedback": feedback,
-                "course":   self.course.get_state(),
-            })
+
+        if not lesson_id:
+            return
+
+        feedback = self.course.record_attempt(lesson_id, hand, accuracy, bpm)
+
+        # Build coaching context
+        lesson_meta = self.engine._lesson or {}
+        wrong_counts = score.get("wrong_note_counts", {})
+        # Convert string keys (from JSON) back to int
+        wrong_counts_int = {int(k): v for k, v in wrong_counts.items()
+                            if str(k).lstrip('-').isdigit()}
+        mastery = self.course._mastery_data(lesson_id, hand)
+        coach_ctx = {
+            "category":          lesson_meta.get("category", ""),
+            "accuracy":          accuracy,
+            "bpm":               bpm,
+            "min_bpm":           self.course.get_min_bpm(lesson_id, hand),
+            "wrong_note_counts": wrong_counts_int,
+            "consecutive_fails": mastery.get("attempts", 0) - mastery.get("passes", 0),
+            "attempts":          mastery.get("attempts", 0),
+            "hand":              hand,
+        }
+        tips = get_tips(coach_ctx) if not feedback["passed"] else []
+
+        await self._broadcast({
+            "type":     "course_attempt",
+            "feedback": feedback,
+            "tips":     tips,
+            "course":   self.course.get_state(),
+        })
 
     # ── Message routing ───────────────────────────────────────────────────────
 
@@ -154,7 +197,8 @@ class PianoServer:
 
         elif t == "connect_device":
             name = _str(msg, "name")
-            ok = self.midi.connect(name, self._midi_callback)
+            ok = self.midi.connect(name, self._midi_callback,
+                                   disconnect_cb=self._sync_device_disconnected)
             await self._broadcast({
                 "type": "device_connected" if ok else "error",
                 "name": name,
@@ -175,22 +219,37 @@ class PianoServer:
             self.course.reset()
             await self._broadcast({"type": "course_state", "course": self.course.get_state()})
 
+        elif t == "export_course":
+            await ws.send(json.dumps({
+                "type":    "course_export",
+                "content": self.course.export_progress(),
+            }))
+
+        elif t == "import_course":
+            raw = msg.get("content")
+            if isinstance(raw, dict) and self.course.import_progress(raw):
+                await self._broadcast({"type": "course_state", "course": self.course.get_state()})
+            else:
+                await ws.send(json.dumps({"type": "error", "message": "Ficheiro de progresso inválido."}))
+
         elif t == "start_lesson":
             lesson_id = _str(msg, "lesson_id", maxlen=_MAX_ID_LEN)
             lesson = get_lesson_by_id(lesson_id)
             if not lesson:
                 await ws.send(json.dumps({"type": "error", "message": "Lesson not found"}))
                 return
-            self._stop_playback()
+            await self._stop_playback_async()
             self.engine.load_lesson(lesson)
             hand = _str(msg, "hand")
             if hand in _VALID_HANDS:
                 self.engine.set_hand(hand)
+            # assess=True means the attempt counts toward mastery
+            self._is_assessing = bool(msg.get("assess", False))
             self.engine.start()
             await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
 
         elif t == "stop_lesson":
-            self._stop_playback()
+            await self._stop_playback_async()
             self.engine.stop()
             self.audio.all_notes_off()
             await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
@@ -234,10 +293,10 @@ class PianoServer:
                 hand = "right"
             bpm = _num(msg, "bpm", state.get("bpm", 60), 20, 240)
             notes = self.engine.get_notes_for_hand(hand)
-            self._start_playback(notes, bpm)
+            await self._start_playback_async(notes, bpm)
 
         elif t == "stop_reference":
-            self._stop_playback()
+            await self._stop_playback_async()
             self.audio.all_notes_off()
 
         elif t == "load_midi":
@@ -251,21 +310,34 @@ class PianoServer:
             filename = _str(msg, "filename", "imported.mid", maxlen=120)
             try:
                 data = base64.b64decode(raw_b64, validate=True)
+            except Exception:
+                await ws.send(json.dumps({"type": "error", "message": "Invalid base64 content"}))
+                return
+            if len(data) > _MAX_MIDI_BYTES:
+                await ws.send(json.dumps({"type": "error", "message": "MIDI file too large"}))
+                return
+            try:
                 lesson = parse_midi_from_bytes(data, filename)
-                self.engine.load_lesson(lesson)
-                await self._broadcast({
-                    "type": "lesson_loaded",
-                    "summary": {
-                        "id": lesson["id"],
-                        "title": lesson["title"],
-                        "category": lesson["category"],
-                        "difficulty": lesson["difficulty"],
-                        "description": lesson["description"],
-                        "hand": lesson.get("hand", "right"),
-                    },
-                })
+            except ValueError as exc:
+                log.info("MIDI parse rejected: %s", exc)
+                await ws.send(json.dumps({"type": "error", "message": "Could not import MIDI file — check it is a valid .mid file."}))
+                return
             except Exception as exc:
-                await ws.send(json.dumps({"type": "error", "message": str(exc)}))
+                log.exception("Unexpected error parsing MIDI: %s", exc)
+                await ws.send(json.dumps({"type": "error", "message": "Could not import MIDI file."}))
+                return
+            self.engine.load_lesson(lesson)
+            await self._broadcast({
+                "type": "lesson_loaded",
+                "summary": {
+                    "id": lesson["id"],
+                    "title": lesson["title"],
+                    "category": lesson["category"],
+                    "difficulty": lesson["difficulty"],
+                    "description": lesson["description"],
+                    "hand": lesson.get("hand", "right"),
+                },
+            })
 
     # ── MIDI input ────────────────────────────────────────────────────────────
 
@@ -274,16 +346,30 @@ class PianoServer:
         if self._loop and self._loop.is_running():
             asyncio.run_coroutine_threadsafe(self._process_midi(msg), self._loop)
 
+    def _sync_device_disconnected(self):
+        """Called from MIDI thread when device disconnects unexpectedly."""
+        if self._loop and self._loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                self._broadcast({"type": "device_disconnected"}),
+                self._loop,
+            )
+
     async def _process_midi(self, msg):
         if msg.type == "note_on" and msg.velocity > 0:
             self.audio.note_on(msg.note, msg.velocity)
+            # Capture expected notes BEFORE advancing (for wrong-note feedback)
+            engine_state = self.engine.get_state()
+            expected_before = engine_state.get("current_expected") or []
             result = self.engine.note_pressed(msg.note)
-            await self._broadcast({
-                "type": "note_on",
-                "note": msg.note,
+            payload = {
+                "type":     "note_on",
+                "note":     msg.note,
                 "velocity": msg.velocity,
-                "result": result,
-            })
+                "result":   result,
+            }
+            if result == "wrong" and expected_before:
+                payload["expected"] = expected_before
+            await self._broadcast(payload)
             if result in ("correct", "wrong"):
                 await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
 
@@ -301,8 +387,11 @@ class PianoServer:
 
     # ── Reference playback ────────────────────────────────────────────────────
 
+    async def _start_playback_async(self, notes, bpm):
+        await self._stop_playback_async()
+        self._start_playback(notes, bpm)
+
     def _start_playback(self, notes, bpm):
-        self._stop_playback()
         self._playback_stop.clear()
 
         def _cb(note, is_on):
@@ -323,7 +412,16 @@ class PianoServer:
         )
         self._playback_thread.start()
 
+    async def _stop_playback_async(self):
+        """Signal playback to stop and wait off the event loop to avoid blocking it."""
+        self._playback_stop.set()
+        if self._playback_thread and self._playback_thread.is_alive():
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, self._playback_thread.join, 2.0)
+        self._playback_stop.clear()
+
     def _stop_playback(self):
+        """Blocking stop — only for use outside the async event loop (shutdown)."""
         self._playback_stop.set()
         if self._playback_thread and self._playback_thread.is_alive():
             self._playback_thread.join(timeout=2.0)

@@ -51,7 +51,12 @@
       <div id="course-stats"></div>
       <div id="course-list"></div>
       <div id="course-reset-row">
-        <button id="btn-reset-course" class="btn-danger-small" title="Apagar todo o progresso do curso">↺ Reiniciar Curso</button>
+        <button id="btn-export-course" class="btn-small" title="Guardar progresso do curso em ficheiro">⬇ Exportar</button>
+        <label class="btn-small" title="Restaurar progresso de ficheiro" style="cursor:pointer">
+          ⬆ Importar
+          <input type="file" id="course-import-input" accept=".json" style="display:none" />
+        </label>
+        <button id="btn-reset-course" class="btn-danger-small" title="Apagar todo o progresso do curso">↺ Reiniciar</button>
       </div>
     </div>
   </aside>
@@ -98,10 +103,17 @@
           </label>
           <span id="auto-speed-streak" class="streak-badge hidden"></span>
         </div>
+        <!-- Min BPM requirement indicator (shown only in course assess mode) -->
+        <div class="ctrl-group" id="min-bpm-row" style="display:none">
+          <label>Mín. BPM</label>
+          <span id="min-bpm-display" class="min-bpm-chip">—</span>
+        </div>
         <!-- Action buttons -->
         <div class="ctrl-group btn-row">
           <button id="btn-reference" disabled>▶ Reference</button>
-          <button id="btn-start"     disabled>▶ Start</button>
+          <button id="btn-practice"  disabled title="Pratica à vontade — não conta para a maestria">▷ Praticar</button>
+          <button id="btn-assess"    disabled title="Tentativa oficial — conta para os passes de maestria" class="btn-assess">🎯 Tentar</button>
+          <button id="btn-start"     disabled class="hidden">▶ Start</button>
           <button id="btn-stop"      disabled>■ Stop</button>
         </div>
       </div>
@@ -154,6 +166,15 @@
 
     <!-- Course attempt feedback banner -->
     <div id="course-feedback" class="course-feedback hidden"></div>
+
+    <!-- Coaching tips panel -->
+    <div id="coaching-panel" class="coaching-panel hidden">
+      <div class="coaching-header">
+        <span>💡 Sugestões do Professor</span>
+        <button id="btn-coaching-close" class="panel-close">✕</button>
+      </div>
+      <ul id="coaching-tips"></ul>
+    </div>
 
     <!-- Result flash overlay -->
     <div id="result-flash" class="hidden"></div>

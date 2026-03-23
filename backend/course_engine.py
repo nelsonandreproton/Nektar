@@ -1,20 +1,30 @@
 """Course progression engine.
 
 Manages a sequential curriculum of piano lessons with strict mastery gates:
-  - ≥90% accuracy counts as a "pass"
+  - ≥90% accuracy AND BPM ≥ min_bpm (where set) counts as a "pass"
   - 3 consecutive passes → lesson mastered → next lesson unlocked
+  - Mastered lessons idle >14 days are flagged for spaced-repetition review
 A diagnostic lesson at the start determines where in the curriculum to begin.
 """
 
 import json
+import logging
 import os
+import time
 from typing import Dict, List, Optional
+
+log = logging.getLogger(__name__)
 
 MASTERY_ACCURACY    = 90   # minimum accuracy % to count as a pass
 MASTERY_CONSECUTIVE = 3    # consecutive passes needed to master a lesson
+REVIEW_DAYS         = 14   # days after mastery before a review is suggested
 
-# Ordered curriculum — every entry is one lesson+hand combination the student
-# must master before the next one unlocks.
+_SCHEMA_VERSION = 2        # increment when progress format changes
+
+# ── Curriculum ────────────────────────────────────────────────────────────────
+# min_bpm: if set, the attempt BPM must be ≥ min_bpm for the pass to count.
+# Omit for songs/chords where accuracy matters more than tempo.
+
 CURRICULUM: List[Dict] = [
     # ── Diagnóstico ──────────────────────────────────────────────────────────
     {
@@ -30,6 +40,7 @@ CURRICULUM: List[Dict] = [
         "hand":      "right",
         "stage":     "Etapa 1: Mão Direita",
         "label":     "Cinco Dedos em Dó",
+        "min_bpm":   60,
     },
     {
         "lesson_id": "songs/hot_cross_buns",
@@ -54,6 +65,7 @@ CURRICULUM: List[Dict] = [
         "hand":      "right",
         "stage":     "Etapa 1: Mão Direita",
         "label":     "Escala de Dó Maior (MD)",
+        "min_bpm":   60,
     },
 
     # ── Etapa 2: Mão Esquerda ────────────────────────────────────────────────
@@ -62,12 +74,14 @@ CURRICULUM: List[Dict] = [
         "hand":      "left",
         "stage":     "Etapa 2: Mão Esquerda",
         "label":     "Cinco Dedos em Dó (ME)",
+        "min_bpm":   60,
     },
     {
         "lesson_id": "scales/c_major_lh",
         "hand":      "left",
         "stage":     "Etapa 2: Mão Esquerda",
         "label":     "Escala de Dó Maior (ME)",
+        "min_bpm":   60,
     },
 
     # ── Etapa 3: Coordenação ─────────────────────────────────────────────────
@@ -76,12 +90,14 @@ CURRICULUM: List[Dict] = [
         "hand":      "both",
         "stage":     "Etapa 3: Coordenação",
         "label":     "Movimento Contrário em Dó",
+        "min_bpm":   50,
     },
     {
         "lesson_id": "scales/c_major_both",
         "hand":      "both",
         "stage":     "Etapa 3: Coordenação",
         "label":     "Escala de Dó (Ambas as Mãos)",
+        "min_bpm":   50,
     },
     {
         "lesson_id": "songs/frere_jacques",
@@ -114,12 +130,14 @@ CURRICULUM: List[Dict] = [
         "hand":      "right",
         "stage":     "Etapa 4: Novas Tonalidades",
         "label":     "Escala de Sol Maior",
+        "min_bpm":   60,
     },
     {
         "lesson_id": "scales/f_major_rh",
         "hand":      "right",
         "stage":     "Etapa 4: Novas Tonalidades",
         "label":     "Escala de Fá Maior",
+        "min_bpm":   60,
     },
     {
         "lesson_id": "songs/lightly_row",
@@ -132,6 +150,7 @@ CURRICULUM: List[Dict] = [
         "hand":      "right",
         "stage":     "Etapa 4: Novas Tonalidades",
         "label":     "Cinco Dedos em Sol",
+        "min_bpm":   60,
     },
 
     # ── Etapa 5: Técnica ─────────────────────────────────────────────────────
@@ -140,12 +159,14 @@ CURRICULUM: List[Dict] = [
         "hand":      "right",
         "stage":     "Etapa 5: Técnica",
         "label":     "Hanon No. 1",
+        "min_bpm":   80,
     },
     {
         "lesson_id": "exercises/alberti_bass",
         "hand":      "left",
         "stage":     "Etapa 5: Técnica",
         "label":     "Baixo Alberti",
+        "min_bpm":   60,
     },
     {
         "lesson_id": "chords/am_progression",
@@ -178,12 +199,14 @@ CURRICULUM: List[Dict] = [
         "hand":      "right",
         "stage":     "Etapa 6: Repertório",
         "label":     "Escala de Lá Menor",
+        "min_bpm":   60,
     },
     {
         "lesson_id": "exercises/broken_chord_c",
         "hand":      "right",
         "stage":     "Etapa 6: Repertório",
         "label":     "Arpejos em Dó",
+        "min_bpm":   60,
     },
     {
         "lesson_id": "songs/ode_to_joy_rh",
@@ -210,24 +233,28 @@ CURRICULUM: List[Dict] = [
         "hand":      "right",
         "stage":     "Etapa 7: Maestria",
         "label":     "Escala de Ré Maior",
+        "min_bpm":   80,
     },
     {
         "lesson_id": "scales/a_major_rh",
         "hand":      "right",
         "stage":     "Etapa 7: Maestria",
         "label":     "Escala de Lá Maior",
+        "min_bpm":   80,
     },
     {
         "lesson_id": "exercises/intervals_thirds",
         "hand":      "right",
         "stage":     "Etapa 7: Maestria",
         "label":     "Intervalos: Terças",
+        "min_bpm":   60,
     },
     {
         "lesson_id": "scales/chromatic_rh",
         "hand":      "right",
         "stage":     "Etapa 7: Maestria",
         "label":     "Escala Cromática",
+        "min_bpm":   60,
     },
     {
         "lesson_id": "songs/bach_prelude_c",
@@ -236,6 +263,11 @@ CURRICULUM: List[Dict] = [
         "label":     "Prelúdio de Bach em Dó",
     },
 ]
+
+# Fast lookup: (lesson_id, hand) → curriculum entry
+_CURRICULUM_INDEX: Dict = {
+    (s["lesson_id"], s["hand"]): s for s in CURRICULUM
+}
 
 
 class CourseEngine:
@@ -249,19 +281,36 @@ class CourseEngine:
         if os.path.exists(self._progress_file):
             try:
                 with open(self._progress_file) as f:
-                    return json.load(f)
-            except Exception:
-                pass
+                    data = json.load(f)
+                data = self._migrate(data)
+                return data
+            except Exception as exc:
+                log.warning("Could not load course progress (%s) — starting fresh", exc)
         return self._defaults()
 
     def _defaults(self) -> dict:
         return {
+            "version":           _SCHEMA_VERSION,
             "diagnostic_complete": False,
-            "current_index":  0,
-            "starting_index": 0,
-            # "{lesson_id}:{hand}" → {consecutive, passes, best_accuracy, attempts}
+            "current_index":     0,
+            "starting_index":    0,
+            # "{lesson_id}:{hand}" → {consecutive, passes, best_accuracy,
+            #                         best_bpm, attempts, last_passed_at}
             "mastery": {},
         }
+
+    def _migrate(self, data: dict) -> dict:
+        v = data.get("version", 0)
+        if v < 1:
+            # Version 0→1: add version field
+            data["version"] = 1
+        if v < 2:
+            # Version 1→2: add best_bpm and last_passed_at to mastery entries
+            for key, m in data.get("mastery", {}).items():
+                m.setdefault("best_bpm", 0.0)
+                m.setdefault("last_passed_at", None)
+            data["version"] = 2
+        return data
 
     def _save(self):
         folder = os.path.dirname(self._progress_file)
@@ -277,10 +326,12 @@ class CourseEngine:
 
     def _mastery_data(self, lesson_id: str, hand: str) -> dict:
         return dict(self._progress["mastery"].get(self._key(lesson_id, hand), {
-            "consecutive": 0,
-            "passes":       0,
-            "best_accuracy": 0.0,
-            "attempts":     0,
+            "consecutive":    0,
+            "passes":         0,
+            "best_accuracy":  0.0,
+            "best_bpm":       0.0,
+            "attempts":       0,
+            "last_passed_at": None,
         }))
 
     # ── Public queries ────────────────────────────────────────────────────────
@@ -297,27 +348,55 @@ class CourseEngine:
                 return False
         return True
 
+    def needs_review(self, lesson_id: str, hand: str) -> bool:
+        """True when the lesson is mastered but hasn't been played in REVIEW_DAYS."""
+        m = self._mastery_data(lesson_id, hand)
+        if m["consecutive"] < MASTERY_CONSECUTIVE:
+            return False
+        lp = m.get("last_passed_at")
+        if lp is None:
+            return False
+        return (time.time() - lp) > REVIEW_DAYS * 86400
+
     def get_current_step(self) -> Optional[dict]:
         idx = self._progress["current_index"]
         return CURRICULUM[idx] if idx < len(CURRICULUM) else None
 
+    def get_min_bpm(self, lesson_id: str, hand: str) -> Optional[float]:
+        step = _CURRICULUM_INDEX.get((lesson_id, hand))
+        return step.get("min_bpm") if step else None
+
     # ── Recording attempts ────────────────────────────────────────────────────
 
-    def record_attempt(self, lesson_id: str, hand: str, accuracy: float) -> dict:
+    def record_attempt(self, lesson_id: str, hand: str,
+                       accuracy: float, bpm: float = 0.0) -> dict:
         """Record a completed lesson attempt. Returns a feedback dict."""
         key = self._key(lesson_id, hand)
         m   = self._mastery_data(lesson_id, hand)
+        m.setdefault("best_bpm", 0.0)
+        m.setdefault("last_passed_at", None)
 
         m["attempts"] += 1
-        passed = accuracy >= MASTERY_ACCURACY
+
+        # BPM gate: attempt must meet min_bpm if defined
+        step    = _CURRICULUM_INDEX.get((lesson_id, hand), {})
+        min_bpm = step.get("min_bpm")
+        bpm_ok  = (min_bpm is None) or (bpm >= min_bpm)
+
+        accuracy_ok = accuracy >= MASTERY_ACCURACY
+        passed      = accuracy_ok and bpm_ok
+
         if passed:
-            m["consecutive"] += 1
-            m["passes"]      += 1
+            m["consecutive"]    += 1
+            m["passes"]         += 1
+            m["last_passed_at"]  = time.time()
         else:
             m["consecutive"] = 0
 
         if accuracy > m["best_accuracy"]:
             m["best_accuracy"] = accuracy
+        if bpm > m["best_bpm"]:
+            m["best_bpm"] = bpm
 
         self._progress["mastery"][key] = m
 
@@ -325,7 +404,7 @@ class CourseEngine:
         is_diagnostic = lesson_id == "diagnostic/assessment"
         if is_diagnostic and not self._progress["diagnostic_complete"]:
             self._progress["diagnostic_complete"] = True
-            m["consecutive"] = MASTERY_CONSECUTIVE   # always pass diagnostic
+            m["consecutive"] = MASTERY_CONSECUTIVE
             self._progress["mastery"][key] = m
             start = self._start_index_from_accuracy(accuracy)
             self._progress["starting_index"] = start
@@ -335,50 +414,59 @@ class CourseEngine:
         newly_mastered = m["consecutive"] >= MASTERY_CONSECUTIVE
         cur = self._progress["current_index"]
         if newly_mastered and cur < len(CURRICULUM):
-            step = CURRICULUM[cur]
-            if step["lesson_id"] == lesson_id and step["hand"] == hand:
+            cur_step = CURRICULUM[cur]
+            if cur_step["lesson_id"] == lesson_id and cur_step["hand"] == hand:
                 self._progress["current_index"] = min(cur + 1, len(CURRICULUM))
 
         self._save()
         return {
-            "passed":         passed,
-            "newly_mastered": newly_mastered,
-            "consecutive":    m["consecutive"],
-            "needed":         MASTERY_CONSECUTIVE,
-            "accuracy":       accuracy,
-            "best_accuracy":  m["best_accuracy"],
-            "is_diagnostic":  is_diagnostic,
+            "passed":          passed,
+            "accuracy_ok":     accuracy_ok,
+            "bpm_ok":          bpm_ok,
+            "newly_mastered":  newly_mastered,
+            "consecutive":     m["consecutive"],
+            "needed":          MASTERY_CONSECUTIVE,
+            "accuracy":        accuracy,
+            "best_accuracy":   m["best_accuracy"],
+            "bpm":             bpm,
+            "min_bpm":         min_bpm,
+            "is_diagnostic":   is_diagnostic,
         }
 
     def _start_index_from_accuracy(self, acc: float) -> int:
-        """Map diagnostic score to curriculum starting index."""
         if acc >= 80:
             return self._first_index_of("Etapa 3: Coordenação")
         if acc >= 60:
             return self._first_index_of("Etapa 2: Mão Esquerda")
-        # 0-59%: start from Etapa 1 (index after diagnostic)
         return self._first_index_of("Etapa 1: Mão Direita")
 
     def _first_index_of(self, stage: str) -> int:
         for i, step in enumerate(CURRICULUM):
             if step["stage"] == stage:
                 return i
-        return 1  # fallback: skip diagnostic
+        return 1
 
     # ── State export ──────────────────────────────────────────────────────────
 
     def get_state(self) -> dict:
+        now = time.time()
         curriculum_out = []
         for i, step in enumerate(CURRICULUM):
-            m = self._mastery_data(step["lesson_id"], step["hand"])
+            m       = self._mastery_data(step["lesson_id"], step["hand"])
+            mastered = m["consecutive"] >= MASTERY_CONSECUTIVE
+            lp       = m.get("last_passed_at")
+            review   = (mastered and lp is not None
+                        and (now - lp) > REVIEW_DAYS * 86400)
             curriculum_out.append({
                 **step,
                 "index":        i,
                 "unlocked":     self.is_unlocked(i),
-                "mastered":     m["consecutive"] >= MASTERY_CONSECUTIVE,
+                "mastered":     mastered,
                 "consecutive":  m["consecutive"],
                 "best_accuracy": m["best_accuracy"],
+                "best_bpm":     m.get("best_bpm", 0.0),
                 "attempts":     m["attempts"],
+                "needs_review": review,
             })
         return {
             "diagnostic_complete": self._progress["diagnostic_complete"],
@@ -387,7 +475,28 @@ class CourseEngine:
             "curriculum":          curriculum_out,
             "mastery_accuracy":    MASTERY_ACCURACY,
             "mastery_consecutive": MASTERY_CONSECUTIVE,
+            "review_days":         REVIEW_DAYS,
         }
+
+    # ── Import / Export ───────────────────────────────────────────────────────
+
+    def export_progress(self) -> dict:
+        """Return the raw progress dict for client-side export."""
+        return dict(self._progress)
+
+    def import_progress(self, data: dict) -> bool:
+        """
+        Overwrite progress from an imported dict.
+        Returns False and leaves state unchanged if validation fails.
+        """
+        if not isinstance(data, dict):
+            return False
+        if "mastery" not in data:
+            return False
+        data = self._migrate(data)
+        self._progress = data
+        self._save()
+        return True
 
     def reset(self):
         self._progress = self._defaults()
