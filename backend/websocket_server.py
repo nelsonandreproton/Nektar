@@ -15,6 +15,7 @@ from .lesson_engine import LessonEngine
 from .lessons_library import get_lesson_by_id, get_lessons_summary
 from .midi_parser import parse_midi_from_bytes, MAX_FILE_BYTES as _MAX_MIDI_BYTES
 from .course_engine import CourseEngine
+from .coach import get_tips
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +55,7 @@ class PianoServer:
         self._loop: asyncio.AbstractEventLoop = None
         self._playback_stop: threading.Event = threading.Event()
         self._playback_thread: threading.Thread = None
+        self._is_assessing: bool = False   # True when lesson started in assess mode
 
         self.engine.set_callbacks(
             on_step_changed=self._sync_broadcast_state,
@@ -132,21 +134,49 @@ class PianoServer:
 
     async def _on_complete_async(self, score: dict):
         await self._broadcast({"type": "lesson_complete", "score": score})
-        # Record attempt in course engine
+
+        if not self._is_assessing:
+            return  # practice mode — don't record toward mastery
+
         state     = self.engine.get_state()
         lesson    = state.get("lesson") or {}
         lesson_id = lesson.get("id", "")
         hand      = state.get("hand", "right")
+        bpm       = float(state.get("bpm", 60))
         total     = score.get("total", 0)
         correct   = score.get("correct", 0)
         accuracy  = round((correct / total * 100) if total > 0 else 0, 1)
-        if lesson_id:
-            feedback = self.course.record_attempt(lesson_id, hand, accuracy)
-            await self._broadcast({
-                "type":     "course_attempt",
-                "feedback": feedback,
-                "course":   self.course.get_state(),
-            })
+
+        if not lesson_id:
+            return
+
+        feedback = self.course.record_attempt(lesson_id, hand, accuracy, bpm)
+
+        # Build coaching context
+        lesson_meta = self.engine._lesson or {}
+        wrong_counts = score.get("wrong_note_counts", {})
+        # Convert string keys (from JSON) back to int
+        wrong_counts_int = {int(k): v for k, v in wrong_counts.items()
+                            if str(k).lstrip('-').isdigit()}
+        mastery = self.course._mastery_data(lesson_id, hand)
+        coach_ctx = {
+            "category":          lesson_meta.get("category", ""),
+            "accuracy":          accuracy,
+            "bpm":               bpm,
+            "min_bpm":           self.course.get_min_bpm(lesson_id, hand),
+            "wrong_note_counts": wrong_counts_int,
+            "consecutive_fails": mastery.get("attempts", 0) - mastery.get("passes", 0),
+            "attempts":          mastery.get("attempts", 0),
+            "hand":              hand,
+        }
+        tips = get_tips(coach_ctx) if not feedback["passed"] else []
+
+        await self._broadcast({
+            "type":     "course_attempt",
+            "feedback": feedback,
+            "tips":     tips,
+            "course":   self.course.get_state(),
+        })
 
     # ── Message routing ───────────────────────────────────────────────────────
 
@@ -189,6 +219,19 @@ class PianoServer:
             self.course.reset()
             await self._broadcast({"type": "course_state", "course": self.course.get_state()})
 
+        elif t == "export_course":
+            await ws.send(json.dumps({
+                "type":    "course_export",
+                "content": self.course.export_progress(),
+            }))
+
+        elif t == "import_course":
+            raw = msg.get("content")
+            if isinstance(raw, dict) and self.course.import_progress(raw):
+                await self._broadcast({"type": "course_state", "course": self.course.get_state()})
+            else:
+                await ws.send(json.dumps({"type": "error", "message": "Ficheiro de progresso inválido."}))
+
         elif t == "start_lesson":
             lesson_id = _str(msg, "lesson_id", maxlen=_MAX_ID_LEN)
             lesson = get_lesson_by_id(lesson_id)
@@ -200,6 +243,8 @@ class PianoServer:
             hand = _str(msg, "hand")
             if hand in _VALID_HANDS:
                 self.engine.set_hand(hand)
+            # assess=True means the attempt counts toward mastery
+            self._is_assessing = bool(msg.get("assess", False))
             self.engine.start()
             await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
 
@@ -312,13 +357,19 @@ class PianoServer:
     async def _process_midi(self, msg):
         if msg.type == "note_on" and msg.velocity > 0:
             self.audio.note_on(msg.note, msg.velocity)
+            # Capture expected notes BEFORE advancing (for wrong-note feedback)
+            engine_state = self.engine.get_state()
+            expected_before = engine_state.get("current_expected") or []
             result = self.engine.note_pressed(msg.note)
-            await self._broadcast({
-                "type": "note_on",
-                "note": msg.note,
+            payload = {
+                "type":     "note_on",
+                "note":     msg.note,
                 "velocity": msg.velocity,
-                "result": result,
-            })
+                "result":   result,
+            }
+            if result == "wrong" and expected_before:
+                payload["expected"] = expected_before
+            await self._broadcast(payload)
             if result in ("correct", "wrong"):
                 await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
 

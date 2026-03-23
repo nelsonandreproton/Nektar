@@ -6,8 +6,8 @@
  */
 
 const CourseUI = (() => {
-  let _state   = null;   // last received course state
-  let _onSelect = null;  // callback(lesson_id, hand) when user clicks a step
+  let _state    = null;   // last received course state
+  let _onSelect = null;   // callback(lesson_id, hand, min_bpm) when user clicks a step
 
   // ── Public API ────────────────────────────────────────────────────────────
 
@@ -28,8 +28,7 @@ const CourseUI = (() => {
       return;
     }
 
-    const { curriculum, current_index, diagnostic_complete,
-            mastery_accuracy, mastery_consecutive } = courseState;
+    const { curriculum, current_index, mastery_consecutive } = courseState;
 
     // Group by stage
     const stages = [];
@@ -58,10 +57,8 @@ const CourseUI = (() => {
       container.appendChild(stageEl);
     }
 
-    // Update the header stats bar
     _updateStats(courseState);
 
-    // Scroll to current lesson
     const cur = container.querySelector(".course-step.current");
     if (cur) cur.scrollIntoView({ block: "center", behavior: "smooth" });
   }
@@ -81,7 +78,8 @@ const CourseUI = (() => {
     const banner = document.getElementById("course-feedback");
     if (!banner) return;
 
-    const { passed, consecutive, needed, accuracy, best_accuracy,
+    const { passed, accuracy_ok, bpm_ok, consecutive, needed,
+            accuracy, bpm, min_bpm, best_accuracy,
             newly_mastered, is_diagnostic } = feedback;
 
     banner.className = "course-feedback " + (passed ? "pass" : "fail");
@@ -91,35 +89,41 @@ const CourseUI = (() => {
     if (is_diagnostic) {
       msg = `Diagnóstico completo! Precisão: ${accuracy}%. O teu caminho foi ajustado.`;
     } else if (newly_mastered) {
-      msg = `Dominaste esta lição! Próxima desbloqueada.`;
+      msg = `🏆 Dominaste esta lição! Próxima desbloqueada.`;
     } else if (passed) {
       const remain = needed - consecutive;
-      msg = `Muito bem! ${accuracy}% — ${consecutive}/${needed} passes consecutivos. Mais ${remain} para avançar.`;
-    } else {
+      msg = `✓ ${accuracy}% — ${consecutive}/${needed} passes consecutivos. Mais ${remain} para avançar.`;
+    } else if (!accuracy_ok && !bpm_ok) {
+      const threshold = _state ? _state.mastery_accuracy : 90;
+      msg = `${accuracy}% (precisas ≥${threshold}%) e BPM ${Math.round(bpm)} (precisas ≥${min_bpm}). Continua!`;
+    } else if (!accuracy_ok) {
       const threshold = _state ? _state.mastery_accuracy : 90;
       msg = `${accuracy}% — precisas de ≥${threshold}% para contar como pass. Continua!`;
+    } else if (!bpm_ok) {
+      msg = `Boa precisão (${accuracy}%), mas o andamento (${Math.round(bpm)} BPM) está abaixo do mínimo (${min_bpm} BPM). Aumenta o BPM!`;
     }
 
     banner.textContent = msg;
     clearTimeout(banner._timer);
-    banner._timer = setTimeout(() => banner.classList.add("hidden"), 8000);
+    banner._timer = setTimeout(() => banner.classList.add("hidden"), 10000);
   }
 
   // ── Internal helpers ──────────────────────────────────────────────────────
 
   function _buildStepEl(step, currentIndex, masteryConsecutive) {
     const el = document.createElement("div");
-    el.className = "course-step";
+    el.className    = "course-step";
     el.dataset.lessonId = step.lesson_id;
     el.dataset.hand     = step.hand;
 
     const isCurrent  = step.index === currentIndex;
     const isLocked   = !step.unlocked;
     const isMastered = step.mastered;
+    const needsReview = step.needs_review;
 
-    if (isCurrent)  el.classList.add("current");
-    if (isLocked)   el.classList.add("locked");
-    if (isMastered) el.classList.add("mastered");
+    if (isCurrent)   el.classList.add("current");
+    if (isLocked)    el.classList.add("locked");
+    if (isMastered)  el.classList.add("mastered");
 
     // Status icon
     const icon = document.createElement("span");
@@ -142,7 +146,25 @@ const CourseUI = (() => {
     handBadge.textContent = step.hand === "right" ? "MD" : step.hand === "left" ? "ME" : "AM";
     el.appendChild(handBadge);
 
-    // Mastery dots (○○○ → ●●●)
+    // Min BPM chip (if set)
+    if (step.min_bpm) {
+      const bpmChip = document.createElement("span");
+      bpmChip.className = "step-min-bpm";
+      bpmChip.textContent = `≥${step.min_bpm}`;
+      bpmChip.title = `Mínimo ${step.min_bpm} BPM para avançar`;
+      el.appendChild(bpmChip);
+    }
+
+    // Spaced-repetition review badge
+    if (needsReview) {
+      const rev = document.createElement("span");
+      rev.className = "step-review-badge";
+      rev.textContent = "↺ Rever";
+      rev.title = "Não praticas há mais de 14 dias — revê esta lição";
+      el.appendChild(rev);
+    }
+
+    // Mastery dots
     const dots = document.createElement("span");
     dots.className = "step-dots";
     for (let i = 0; i < masteryConsecutive; i++) {
@@ -160,10 +182,9 @@ const CourseUI = (() => {
       el.appendChild(acc);
     }
 
-    // Click to select (only unlocked lessons)
     if (!isLocked) {
       el.addEventListener("click", () => {
-        if (_onSelect) _onSelect(step.lesson_id, step.hand);
+        if (_onSelect) _onSelect(step.lesson_id, step.hand, step.min_bpm || null);
       });
     }
 
@@ -174,15 +195,19 @@ const CourseUI = (() => {
     const bar = document.getElementById("course-stats");
     if (!bar) return;
 
-    const { curriculum, current_index } = courseState;
+    const { curriculum } = courseState;
     const total   = curriculum.length;
     const mastered = curriculum.filter(s => s.mastered).length;
+    const reviewing = curriculum.filter(s => s.needs_review).length;
     const pct     = Math.round((mastered / total) * 100);
 
     bar.innerHTML =
       `<span>${mastered}/${total} dominadas</span>` +
       `<div class="course-progress-bar"><div class="course-progress-fill" style="width:${pct}%"></div></div>` +
-      `<span>${pct}%</span>`;
+      `<span>${pct}%</span>` +
+      (reviewing > 0
+        ? `<span class="step-review-badge" title="${reviewing} lições aguardam revisão">↺ ${reviewing}</span>`
+        : "");
   }
 
   return { init, render, setActiveLessonId, showAttemptFeedback };

@@ -27,6 +27,7 @@ class LessonEngine:
         self._mode: str = "wait"  # wait | drill | metronome
         self._bpm: float = 60.0
         self._score: dict = {"correct": 0, "wrong": 0, "missed": 0, "total": 0}
+        self._note_wrong_counts: Dict[int, int] = {}  # midi → wrong press count
 
         # Auto-speed (adaptive BPM)
         self._auto_speed: bool = False
@@ -56,6 +57,7 @@ class LessonEngine:
         self._current_step = 0
         self._pressed_this_step = set()
         self._wrong_notes = set()
+        self._note_wrong_counts = {}
         self._bpm = float(lesson.get("default_bpm", 60))
         self._loop_start = None
         self._loop_end = None
@@ -128,6 +130,7 @@ class LessonEngine:
         self._current_step = 0
         self._pressed_this_step = set()
         self._wrong_notes = set()
+        self._note_wrong_counts = {}
         self._auto_speed_streak = 0
         self._score = {"correct": 0, "wrong": 0, "missed": 0, "total": len(self._steps)}
         self._status = "playing"
@@ -193,6 +196,8 @@ class LessonEngine:
                 self._advance_step()
             return "correct"
         else:
+            # Track per-note wrong count regardless of mode
+            self._note_wrong_counts[note] = self._note_wrong_counts.get(note, 0) + 1
             if self._mode == "drill":
                 # Drill mode: wrong note resets chord attempt, no score penalty
                 self._pressed_this_step = set()
@@ -261,7 +266,7 @@ class LessonEngine:
             "current_expected": current_expected,
             "current_fingering": current_fingering,
             "next_notes": next_notes,
-            "score": self._score,
+            "score": {**self._score, "wrong_note_counts": dict(self._note_wrong_counts)},
             "bpm": self._bpm,
             "hand": self._hand,
             "mode": self._mode,
