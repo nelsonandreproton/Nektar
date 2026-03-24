@@ -80,6 +80,9 @@ const LessonUI = (() => {
       el.addEventListener("click", () => selectLesson(l));
       list.appendChild(el);
     }
+
+    const activeEl = list.querySelector(".lesson-item.active");
+    if (activeEl) activeEl.scrollIntoView({ block: "start", behavior: "smooth" });
   }
 
   function _renderInstructions(items) {

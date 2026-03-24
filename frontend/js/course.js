@@ -60,7 +60,7 @@ const CourseUI = (() => {
     _updateStats(courseState);
 
     const cur = container.querySelector(".course-step.current");
-    if (cur) cur.scrollIntoView({ block: "center", behavior: "smooth" });
+    if (cur) cur.scrollIntoView({ block: "start", behavior: "smooth" });
   }
 
   /** Highlight the actively playing lesson in the course list. */
