@@ -560,10 +560,6 @@ document.addEventListener("DOMContentLoaded", () => {
     Metronome.stop();
   });
 
-  // ── Initialise button visibility (non-course mode is the default) ──────────
-
-  _setCourseButtonsVisible(false);
-
   // ── Note labels toggle ─────────────────────────────────────────────────────
 
   document.getElementById("labels-toggle").addEventListener("change", (e) => {
