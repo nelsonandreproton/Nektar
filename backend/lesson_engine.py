@@ -124,6 +124,18 @@ class LessonEngine:
         self._hand = saved
         return notes
 
+    def get_steps(self) -> List[dict]:
+        """Return all steps as plain dicts (used by the piano roll UI)."""
+        return [
+            {
+                "beat":     s.beat,
+                "duration": s.duration,
+                "notes":    sorted(s.notes),
+                "hand":     s.hand,
+            }
+            for s in self._steps
+        ]
+
     # ── Control ───────────────────────────────────────────────────────────────
 
     def start(self):
@@ -156,7 +168,7 @@ class LessonEngine:
         self._auto_speed_streak = 0  # reset streak on manual BPM change
 
     def set_mode(self, mode: str):
-        if mode not in ("wait", "drill", "metronome"):
+        if mode not in ("wait", "drill", "metronome", "timed"):
             raise ValueError(f"Invalid mode: {mode!r}")
         self._mode = mode
 
@@ -184,6 +196,9 @@ class LessonEngine:
         """
         if self._status != "playing" or self._current_step >= len(self._steps):
             return "unexpected"
+
+        if self._mode == "timed":
+            return "unexpected"  # roll.js owns scoring in timed mode
 
         expected = self._steps[self._current_step].notes
 

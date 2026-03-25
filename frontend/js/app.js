@@ -3,6 +3,7 @@
  * Wires WebSocket events → Keyboard + LessonUI, and UI controls → WebSocket.
  */
 document.addEventListener("DOMContentLoaded", () => {
+  Roll.init();
 
   // ── State ──────────────────────────────────────────────────────────────────
   let currentHand     = "right";
@@ -93,6 +94,10 @@ document.addEventListener("DOMContentLoaded", () => {
     const lesson     = allLessons.find(l => l.id === lessonId);
     if (lesson) LessonUI.selectLesson(lesson);
 
+    // Directly toggle Timed button (lesson:selected may not fire if allLessons was empty)
+    document.getElementById("btn-mode-timed")
+      .classList.toggle("hidden", !lessonId.startsWith("songs/"));
+
     currentHand = hand;
     _syncHandButtons(hand);
     _lockHandButtons(true);  // hand is fixed by curriculum in course mode
@@ -136,6 +141,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const allLessons = LessonUI.getAllLessons();
     const lesson = allLessons.find(l => l.id === step.lesson_id);
     if (lesson) LessonUI.selectLesson(lesson);
+
+    document.getElementById("btn-mode-timed")
+      .classList.toggle("hidden", !step.lesson_id.startsWith("songs/"));
 
     currentHand   = step.hand;
     currentMinBpm = step.min_bpm || null;
@@ -264,12 +272,18 @@ document.addEventListener("DOMContentLoaded", () => {
     Keyboard.setVelocity(note, velocity || 80);
     LessonUI.markChipPressed(note, true);
 
-    if (result === "correct") {
+    if (currentMode === "timed") {
+      const r = Roll.notePressed(note);
+      if (r === "chord_complete" || r === "note_accepted") Keyboard.flashCorrect(note);
+      else if (r === "wrong") Keyboard.flashWrong(note);
+    } else if (result === "correct") {
       Keyboard.flashCorrect(note);
       LessonUI.flashResult("correct");
+      Roll.noteHit(note, true);
     } else if (result === "wrong") {
       Keyboard.flashWrong(note);
       LessonUI.flashResult("wrong");
+      Roll.noteHit(note, false);
 
       // Show what was expected
       if (expected && expected.length > 0) {
@@ -321,6 +335,39 @@ document.addEventListener("DOMContentLoaded", () => {
     applyState(e.detail.state);
   });
 
+  window.addEventListener("ws:lesson_steps", (e) => {
+    Roll.start(e.detail.steps, e.detail.bpm,
+      currentMode === "timed" ? "timed" : "visual",
+      currentMode === "timed" ? _onTimedComplete : null,
+      currentMode === "timed" ? _onTimedStepChange : null);
+  });
+
+  function _onTimedStepChange(notes) {
+    LessonUI.updateHint(notes.length > 0 ? notes : null, {});
+    StaffView.update(notes);
+  }
+
+  function _onTimedComplete(score) {
+    // score = {correct, wrong_steps, total}
+    const id = LessonUI.getActiveLessonId();
+    lessonStatus = "completed";
+    document.getElementById("btn-assess").classList.remove("assessing");
+    _enableStartButtons(true);
+    document.getElementById("btn-stop").disabled = true;
+    document.getElementById("bpm-slider").disabled = false;
+    WS.send({
+      type: "timed_complete",
+      lesson_id: id,
+      hand: currentHand,
+      bpm: currentBpm,
+      assess: isAssessing,
+      correct: score.correct,
+      wrong_steps: score.wrong_steps,
+      total: score.total,
+    });
+    isAssessing = false;
+  }
+
   window.addEventListener("ws:lesson_complete", (e) => {
     const score = e.detail.score;
     lessonStatus = "completed";
@@ -330,6 +377,7 @@ document.addEventListener("DOMContentLoaded", () => {
     LessonUI.updateHint(null);
     LessonUI.updateNextNotes([]);
     StaffView.update([]);
+    Roll.stop();
 
     const stepsAttempted = score.correct + (score.wrong_steps || 0);
     const pct   = stepsAttempted > 0 ? Math.round((score.correct / stepsAttempted) * 100) : 0;
@@ -364,6 +412,7 @@ document.addEventListener("DOMContentLoaded", () => {
       currentBpm = state.bpm;
       document.getElementById("bpm-slider").value        = Math.round(currentBpm);
       document.getElementById("bpm-display").textContent = Math.round(currentBpm);
+      Roll.updateBpm(currentBpm);
     }
 
     if (state.hand && state.hand !== currentHand) {
@@ -427,7 +476,11 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("coaching-panel").classList.add("hidden");
     // Mark btn-assess as "assessing" (orange) while lesson runs
     document.getElementById("btn-assess").classList.toggle("assessing", assess);
-    WS.send({ type: "start_lesson", lesson_id: id, hand: currentHand, assess });
+    WS.send({ type: "start_lesson", lesson_id: id, hand: currentHand, assess,
+              mode: currentMode === "timed" ? "timed" : undefined });
+    if (currentMode === "timed") {
+      document.getElementById("bpm-slider").disabled = true;
+    }
     CourseUI.setActiveLessonId(id, currentHand);
     Session.startTimer();
     Session.recordLessonPlayed(id);
@@ -436,18 +489,21 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-stop").addEventListener("click", () => {
     isAssessing = false;
     document.getElementById("btn-assess").classList.remove("assessing");
+    document.getElementById("bpm-slider").disabled = false;
     WS.send({ type: "stop_lesson" });
     WS.send({ type: "stop_reference" });
     Keyboard.clearAll();
     LessonUI.updateHint(null);
     LessonUI.updateNextNotes([]);
     StaffView.update([]);
+    Roll.stop();
     loopPending   = false;
     loopStartStep = null;
   });
 
   document.getElementById("btn-reference").addEventListener("click", () => {
-    WS.send({ type: "play_reference", hand: currentHand, bpm: currentBpm });
+    WS.send({ type: "play_reference", lesson_id: LessonUI.getActiveLessonId(),
+              hand: currentHand, bpm: currentBpm });
   });
 
   // Hand selector
@@ -459,15 +515,32 @@ document.addEventListener("DOMContentLoaded", () => {
     WS.send({ type: "set_hand", hand: currentHand });
   });
 
-  // Mode selector (wait / drill)
+  // Mode selector (wait / drill / timed)
   document.getElementById("mode-btns").addEventListener("click", (e) => {
     const btn = e.target.closest(".seg-btn[data-mode]");
-    if (!btn) return;
+    if (!btn || btn.disabled) return;
+    if (lessonStatus === "playing") return;  // no mode change mid-lesson
     currentMode = btn.dataset.mode;
     document.querySelectorAll(".seg-btn[data-mode]").forEach(b =>
       b.classList.toggle("active", b.dataset.mode === currentMode)
     );
-    WS.send({ type: "set_mode", mode: currentMode });
+    if (currentMode !== "timed") {
+      WS.send({ type: "set_mode", mode: currentMode });
+    }
+  });
+
+  // Show/hide Timed button based on selected lesson category (songs only)
+  window.addEventListener("lesson:selected", (e) => {
+    const isSong = e.detail && e.detail.category === "songs";
+    const timedBtn = document.getElementById("btn-mode-timed");
+    timedBtn.classList.toggle("hidden", !isSong);
+    if (!isSong && currentMode === "timed") {
+      currentMode = "wait";
+      document.querySelectorAll(".seg-btn[data-mode]").forEach(b =>
+        b.classList.toggle("active", b.dataset.mode === "wait")
+      );
+      WS.send({ type: "set_mode", mode: "wait" });
+    }
   });
 
   // BPM slider

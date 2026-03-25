@@ -24,7 +24,7 @@ _MAX_CLIENTS    = 8
 _MAX_MSG_BYTES  = 15 * 1024 * 1024   # 15 MB (covers base64-encoded 10 MB MIDI)
 _MAX_B64_BYTES  = 14 * 1024 * 1024   # base64 payload limit
 _VALID_HANDS    = frozenset({"right", "left", "both"})
-_VALID_MODES    = frozenset({"wait", "drill", "metronome"})
+_VALID_MODES    = frozenset({"wait", "drill", "metronome", "timed"})
 _MAX_NAME_LEN   = 256
 _MAX_ID_LEN     = 128
 
@@ -244,10 +244,18 @@ class PianoServer:
             hand = _str(msg, "hand")
             if hand in _VALID_HANDS:
                 self.engine.set_hand(hand)
+            mode = _str(msg, "mode")
+            if mode in _VALID_MODES:
+                self.engine.set_mode(mode)
             # assess=True means the attempt counts toward mastery
             self._is_assessing = bool(msg.get("assess", False))
             self.engine.start()
             await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
+            await self._broadcast({
+                "type":  "lesson_steps",
+                "steps": self.engine.get_steps(),
+                "bpm":   self.engine.get_state()["bpm"],
+            })
 
         elif t == "stop_lesson":
             await self._stop_playback_async()
@@ -287,7 +295,49 @@ class PianoServer:
             self.engine.clear_loop()
             await self._broadcast({"type": "lesson_state", "state": self.engine.get_state()})
 
+        elif t == "timed_complete":
+            lesson_id   = _str(msg, "lesson_id", maxlen=_MAX_ID_LEN)
+            hand        = _str(msg, "hand") if _str(msg, "hand") in _VALID_HANDS else "right"
+            correct     = int(_num(msg, "correct",     0, 0, 99999))
+            wrong_steps = int(_num(msg, "wrong_steps", 0, 0, 99999))
+            total       = int(_num(msg, "total",       1, 1, 99999))
+            bpm         = _num(msg, "bpm", 60, 20, 240)
+            assess      = bool(msg.get("assess", False))
+
+            steps_attempted = correct + wrong_steps
+            accuracy = round((correct / steps_attempted * 100) if steps_attempted > 0 else 0, 1)
+            score = {"correct": correct, "wrong": wrong_steps,
+                     "wrong_steps": wrong_steps, "missed": wrong_steps, "total": total}
+
+            await self._broadcast({"type": "lesson_complete", "score": score})
+
+            if assess and lesson_id:
+                feedback = self.course.record_attempt(lesson_id, hand, accuracy, bpm)
+                lesson_meta = get_lesson_by_id(lesson_id) or {}
+                mastery = self.course._mastery_data(lesson_id, hand)
+                coach_ctx = {
+                    "category":          lesson_meta.get("category", ""),
+                    "accuracy":          accuracy,
+                    "bpm":               bpm,
+                    "min_bpm":           self.course.get_min_bpm(lesson_id, hand),
+                    "wrong_note_counts": {},
+                    "consecutive_fails": mastery.get("attempts", 0) - mastery.get("passes", 0),
+                    "attempts":          mastery.get("attempts", 0),
+                    "hand":              hand,
+                }
+                tips = get_tips(coach_ctx) if not feedback["passed"] else []
+                await self._broadcast({
+                    "type": "course_attempt", "feedback": feedback,
+                    "tips": tips, "course": self.course.get_state(),
+                })
+
         elif t == "play_reference":
+            lesson_id = _str(msg, "lesson_id", maxlen=_MAX_ID_LEN)
+            # Load lesson into engine if not already loaded (e.g. before first start_lesson)
+            if lesson_id and not self.engine._lesson:
+                lesson = get_lesson_by_id(lesson_id)
+                if lesson:
+                    self.engine.load_lesson(lesson)
             state = self.engine.get_state()
             hand = _str(msg, "hand") or state.get("hand", "right")
             if hand not in _VALID_HANDS:

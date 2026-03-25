@@ -137,6 +137,7 @@ const LessonUI = (() => {
     updateHint(null);
     updateNextNotes([]);
 
+    window.dispatchEvent(new CustomEvent("lesson:selected", { detail: lesson }));
     return lesson;
   }
 

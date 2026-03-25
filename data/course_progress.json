@@ -11,6 +11,14 @@
       "best_bpm": 999.0,
       "attempts": 1,
       "last_passed_at": 1774289072.2826183
+    },
+    "exercises/five_finger_c:right": {
+      "consecutive": 3,
+      "passes": 3,
+      "best_accuracy": 100.0,
+      "best_bpm": 60.0,
+      "attempts": 3,
+      "last_passed_at": 1774361497.6048906
     }
   }
 }
